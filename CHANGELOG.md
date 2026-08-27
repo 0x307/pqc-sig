@@ -12,7 +12,9 @@ document for what counts as breaking inside `0.x`.
 ### Added
 
 - Initial release: ML-DSA-44/65/87 (FIPS 204), all 12 SLH-DSA parameter sets (FIPS 205), and
-  FN-DSA-512/1024 (FIPS 206 draft, `fndsa` feature) — 17 algorithms, 85 tests passing.
+  FN-DSA-512/1024 (FIPS 206 draft, `fndsa` feature) — 17 algorithms, 79 tests passing (lib
+  unit tests, per-algorithm integration tests, Multikey encoding tests, and independent
+  multicodec interop tests, plus doctests).
 - WASM-compatible builds (`wasm` feature) for ML-DSA and SLH-DSA, with a WIT Component Model
   interface at `wit/pqc-sig.wit`.
 - `no_std` + `alloc` support, caller-provided RNG, secret keys zeroized on drop.
