@@ -1,0 +1,242 @@
+// pqc-sig/wit/pqc-sig.wit
+//
+// WIT interface for the pqc-sig WASM Component Model component.
+// Package: x307:pqc-sig@0.1.0
+//
+// This interface enables any WASM runtime (wasmtime, wasmer, browser via jco)
+// to consume post-quantum signature operations as a component, similar to a .dll or .jar.
+//
+// Build with:
+//   wasm-pack build --target web --no-default-features --features wasm
+
+package x307:pqc-sig@0.1.0;
+
+/// Core signature types shared across all algorithm interfaces.
+interface types {
+    /// Identifies the post-quantum signature algorithm.
+    enum sig-algorithm {
+        /// ML-DSA-44 (NIST FIPS 204, Security Level 2)
+        ml-dsa-44,
+        /// ML-DSA-65 (NIST FIPS 204, Security Level 3) — recommended default
+        ml-dsa-65,
+        /// ML-DSA-87 (NIST FIPS 204, Security Level 5)
+        ml-dsa-87,
+        /// SLH-DSA-SHA2-128s (NIST FIPS 205, Security Level 1, small signatures)
+        slh-dsa-sha2-128s,
+        /// SLH-DSA-SHA2-128f (NIST FIPS 205, Security Level 1, fast signing)
+        slh-dsa-sha2-128f,
+        /// SLH-DSA-SHA2-192s (NIST FIPS 205, Security Level 3, small signatures)
+        slh-dsa-sha2-192s,
+        /// SLH-DSA-SHA2-192f (NIST FIPS 205, Security Level 3, fast signing)
+        slh-dsa-sha2-192f,
+        /// SLH-DSA-SHA2-256s (NIST FIPS 205, Security Level 5, small signatures)
+        slh-dsa-sha2-256s,
+        /// SLH-DSA-SHA2-256f (NIST FIPS 205, Security Level 5, fast signing)
+        slh-dsa-sha2-256f,
+        /// SLH-DSA-SHAKE-128s (NIST FIPS 205, Security Level 1, small signatures)
+        slh-dsa-shake-128s,
+        /// SLH-DSA-SHAKE-128f (NIST FIPS 205, Security Level 1, fast signing)
+        slh-dsa-shake-128f,
+        /// SLH-DSA-SHAKE-192s (NIST FIPS 205, Security Level 3, small signatures)
+        slh-dsa-shake-192s,
+        /// SLH-DSA-SHAKE-192f (NIST FIPS 205, Security Level 3, fast signing)
+        slh-dsa-shake-192f,
+        /// SLH-DSA-SHAKE-256s (NIST FIPS 205, Security Level 5, small signatures)
+        slh-dsa-shake-256s,
+        /// SLH-DSA-SHAKE-256f (NIST FIPS 205, Security Level 5, fast signing)
+        slh-dsa-shake-256f,
+        /// FN-DSA-512 / Falcon-512 (NIST FIPS 206, Security Level 1) — NOT WASM-compatible
+        fn-dsa-512,
+        /// FN-DSA-1024 / Falcon-1024 (NIST FIPS 206, Security Level 5) — NOT WASM-compatible
+        fn-dsa-1024,
+    }
+
+    /// A signature error.
+    variant sig-error {
+        /// Key generation failed.
+        key-generation(string),
+        /// Signing operation failed.
+        signing(string),
+        /// Signature verification failed (invalid signature).
+        verification-failed,
+        /// Invalid public key (wrong size, wrong algorithm, or malformed).
+        invalid-public-key(string),
+        /// Invalid secret key (wrong size, wrong algorithm, or malformed).
+        invalid-secret-key(string),
+        /// Invalid signature (wrong size, wrong algorithm, or malformed).
+        invalid-signature(string),
+        /// Algorithm not available (feature not enabled).
+        algorithm-not-available(string),
+        /// Generic internal error.
+        internal(string),
+    }
+}
+
+/// ML-DSA (NIST FIPS 204) interface — pure Rust, WASM-native.
+///
+/// All three parameter sets are available without any feature flags.
+interface ml-dsa {
+    use types.{sig-error};
+
+    /// ML-DSA parameter set selection.
+    enum parameter-set {
+        /// Security Level 2 — 1312-byte public key, 2420-byte signature
+        ml-dsa-44,
+        /// Security Level 3 — 1952-byte public key, 3309-byte signature (recommended)
+        ml-dsa-65,
+        /// Security Level 5 — 2592-byte public key, 4627-byte signature
+        ml-dsa-87,
+    }
+
+    /// An ML-DSA keypair resource (holds secret key material in WASM memory).
+    resource ml-dsa-keypair {
+        /// Generate a new keypair for the given parameter set.
+        /// Uses the WASM runtime's entropy source (window.crypto.getRandomValues).
+        constructor(params: parameter-set);
+
+        /// Returns the public key bytes.
+        /// - ML-DSA-44:  1312 bytes
+        /// - ML-DSA-65:  1952 bytes
+        /// - ML-DSA-87:  2592 bytes
+        public-key: func() -> list<u8>;
+
+        /// Returns the public key as a base64url-encoded string (no padding).
+        public-key-base64url: func() -> string;
+
+        /// Returns the parameter set this keypair was generated for.
+        parameter-set: func() -> parameter-set;
+
+        /// Sign a message, returning the signature bytes.
+        /// Uses randomized (hedged) signing per FIPS 204.
+        /// - ML-DSA-44:  2420 bytes
+        /// - ML-DSA-65:  3309 bytes
+        /// - ML-DSA-87:  4627 bytes
+        sign: func(message: list<u8>) -> result<list<u8>, sig-error>;
+    }
+
+    /// Verify an ML-DSA signature.
+    ///
+    /// Returns ok(unit) if valid, err(verification-failed) if invalid.
+    verify: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        message: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
+}
+
+/// SLH-DSA (NIST FIPS 205) interface — pure Rust, WASM-native.
+///
+/// All 12 parameter sets are available without any feature flags.
+/// Note: SLH-DSA signatures are large (7856–49856 bytes depending on parameter set).
+interface slh-dsa {
+    use types.{sig-error};
+
+    /// SLH-DSA parameter set selection.
+    enum parameter-set {
+        /// SHA2-128s: Security Level 1, small signatures (7856 bytes)
+        sha2-128s,
+        /// SHA2-128f: Security Level 1, fast signing (17088 bytes)
+        sha2-128f,
+        /// SHA2-192s: Security Level 3, small signatures (16224 bytes)
+        sha2-192s,
+        /// SHA2-192f: Security Level 3, fast signing (35664 bytes)
+        sha2-192f,
+        /// SHA2-256s: Security Level 5, small signatures (29792 bytes)
+        sha2-256s,
+        /// SHA2-256f: Security Level 5, fast signing (49856 bytes)
+        sha2-256f,
+        /// SHAKE-128s: Security Level 1, small signatures (7856 bytes)
+        shake-128s,
+        /// SHAKE-128f: Security Level 1, fast signing (17088 bytes)
+        shake-128f,
+        /// SHAKE-192s: Security Level 3, small signatures (16224 bytes)
+        shake-192s,
+        /// SHAKE-192f: Security Level 3, fast signing (35664 bytes)
+        shake-192f,
+        /// SHAKE-256s: Security Level 5, small signatures (29792 bytes)
+        shake-256s,
+        /// SHAKE-256f: Security Level 5, fast signing (49856 bytes)
+        shake-256f,
+    }
+
+    /// An SLH-DSA keypair resource.
+    resource slh-dsa-keypair {
+        /// Generate a new keypair for the given parameter set.
+        constructor(params: parameter-set);
+
+        /// Returns the public key bytes (32, 48, or 64 bytes depending on security level).
+        public-key: func() -> list<u8>;
+
+        /// Returns the parameter set this keypair was generated for.
+        parameter-set: func() -> parameter-set;
+
+        /// Sign a message (randomized signing).
+        sign: func(message: list<u8>) -> result<list<u8>, sig-error>;
+
+        /// Sign a message deterministically (no randomness).
+        sign-deterministic: func(message: list<u8>) -> result<list<u8>, sig-error>;
+    }
+
+    /// Verify an SLH-DSA signature.
+    verify: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        message: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
+}
+
+/// Utility functions exposed at the component level.
+interface utils {
+    use types.{sig-algorithm};
+
+    /// Returns the crate version string (e.g. "0.1.0").
+    version: func() -> string;
+
+    /// Returns the primary algorithm identifier (e.g. "ML-DSA-65").
+    primary-algorithm: func() -> string;
+
+    /// Returns the expected public key size in bytes for the given algorithm.
+    public-key-size: func(algorithm: sig-algorithm) -> u32;
+
+    /// Returns the maximum signature size in bytes for the given algorithm.
+    signature-size: func(algorithm: sig-algorithm) -> u32;
+
+    /// Returns the secret key size in bytes for the given algorithm.
+    secret-key-size: func(algorithm: sig-algorithm) -> u32;
+
+    /// Returns the FIPS standard number for the given algorithm (e.g. "FIPS-204").
+    fips-standard: func(algorithm: sig-algorithm) -> string;
+}
+
+/// The pqc-sig world — exports all signature interfaces as a WASM component.
+///
+/// Consumers import this world to use post-quantum signatures in any WASM runtime.
+///
+/// # Example (JavaScript via jco)
+/// ```javascript
+/// import { mlDsa, slhDsa, utils } from './pqc_sig.js';
+///
+/// // ML-DSA-65 (recommended)
+/// const keypair = new mlDsa.MlDsaKeypair('ml-dsa-65');
+/// const pubKey = keypair.publicKey();
+/// const signature = keypair.sign(new TextEncoder().encode("Hello, world!"));
+/// const valid = mlDsa.verify('ml-dsa-65', pubKey, message, signature);
+///
+/// // SLH-DSA (all 12 parameter sets available)
+/// const slhKeypair = new slhDsa.SlhDsaKeypair('sha2-128s');   // Level 1 small
+/// const slhKeypair3 = new slhDsa.SlhDsaKeypair('sha2-192s');  // Level 3 small
+/// const slhKeypair5 = new slhDsa.SlhDsaKeypair('sha2-256s');  // Level 5 small
+/// const slhSig = slhKeypair.sign(message);
+/// ```
+world pqc-sig {
+    /// ML-DSA (NIST FIPS 204) — all three parameter sets.
+    export ml-dsa;
+
+    /// SLH-DSA (NIST FIPS 205) — all 12 parameter sets.
+    export slh-dsa;
+
+    /// Utility functions (version, sizes, FIPS standard).
+    export utils;
+}

@@ -1,0 +1,105 @@
+name: cargo-deny
+
+# Separate from ci.yml on purpose (Ed, 2026-08-25). This workflow is EXPECTED to fail:
+# the PQClean project upstream of the `pqcrypto-*` family is being archived, so the
+# `fndsa`-gated dependencies carry unmaintained advisories that are accepted, not fixed
+# (see P1-06 and the "Known and accepted advisories" section of SECURITY.md). Keeping it
+# out of ci.yml means the main CI badge stays green and honest while this advisory signal
+# stays visible on its own badge. This workflow is deliberately NOT a required status
+# check — "non-blocking" in that sense only, never in the sense of hiding its failures.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so a new advisory surfaces without anyone remembering to look — the whole
+    # reason this doesn't only run at publish time (P1-06).
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+# Matches ci.yml's convention: a superseded commit's run is wasted spend on a private
+# repo with metered Actions minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-latest
+    strategy:
+      # A failure on any one check still runs the rest — advisories, bans, licenses, and
+      # sources are independent questions and one shouldn't hide the others. Done with
+      # fail-fast rather than `continue-on-error: true`, which would also mark the failing
+      # job green and suppress the exact signal P1-06 chose to preserve (and would leave
+      # the `if: failure()` issue job below permanently dead).
+      fail-fast: false
+      matrix:
+        checks:
+          - advisories
+          - bans
+          - licenses
+          - sources
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        id: deny
+        with:
+          command: check ${{ matrix.checks }}
+          arguments: --config deny.toml
+
+  open-issue-on-failure:
+    needs: cargo-deny
+    # Scheduled runs only. Every push already fails on the accepted PQClean advisories, so
+    # firing this on push would comment on the tracking issue several times a day and bury
+    # the thing it exists to surface: a genuinely NEW advisory landing on top of the
+    # accepted ones. The weekly run is the heartbeat; a push failure still shows red.
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open or update issue for failing weekly advisory scan
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "cargo-deny weekly scan failed";
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "security,cargo-deny",
+            });
+            const already = existing.find(i => i.title === title);
+            const body = [
+              `The scheduled weekly \`cargo-deny\` run failed.`,
+              ``,
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ``,
+              `Check the run output for which category (advisories / bans / licenses / sources)`,
+              `failed, and record the decision in this repo's dependency-review notes:`,
+              `resolved, accepted, or blocking.`,
+              ``,
+              `**Note:** the \`advisories\` check is expected to fail on the accepted PQClean`,
+              `advisories listed in SECURITY.md. Compare this run's output against that list`,
+              `before treating it as new — the point of this issue is to catch an advisory`,
+              `that is *not* already on it.`,
+            ].join("\n");
+            if (already) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: already.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["security", "cargo-deny"],
+              });
+            }
