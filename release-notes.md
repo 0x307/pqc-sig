@@ -27,6 +27,40 @@ would be rejected by any spec-conformant verifier (e.g. the `ssi` crate).
   confirms the recovered multicodec code and key bytes match what we encoded, for ML-DSA-44/65/87
   and two SLH-DSA parameter sets.
 
+### Added: Hybrid Ed25519 + ML-DSA-65 combiner (`hybrid` feature)
+
+`HybridSigner` produces both a classical Ed25519 and a post-quantum ML-DSA-65 signature on
+`sign()`; `verify()` requires both to pass, with the failing side identifiable
+(`SigError::HybridClassicalFailed` / `HybridPqcFailed`). For bridging classical deployments
+to PQC during migration. Pure Rust (`ed25519-dalek`), WASM-compatible, `no_std` + `alloc`.
+
+### Changed: `fndsa` feature migrated from `pqcrypto-falcon` to `fn-dsa` (pure Rust)
+
+Resolves RUSTSEC-2026-0165/0163/0162 (see [`SECURITY.md`](SECURITY.md)) and drops the C-FFI /
+non-WASM limitation — `cargo build --target wasm32-unknown-unknown --features fndsa` now
+succeeds, and no C compiler is needed to build any feature of this crate.
+
+- `FnDsa512Keypair::generate` / `FnDsa1024Keypair::generate` now take a caller-provided RNG
+  (`generate(&mut rng)`), matching this crate's RNG convention everywhere else. Previously used
+  `pqcrypto-falcon`'s internal RNG.
+- `FnDsa512Keypair::sign` / `FnDsa1024Keypair::sign` now take a caller-provided RNG
+  (`sign(&mut rng, message)`) — FN-DSA signing is randomized, unlike ML-DSA.
+- FN-DSA secret key wire size changed: 1345 bytes for FN-DSA-512 (was 1281), 2369 bytes for
+  FN-DSA-1024 (was 2305). This is `fn-dsa`'s own encoded signing-key format, not the raw NIST
+  secret-key size — implementation-defined, the same posture this crate already takes for the
+  ML-DSA seed encoding. Public key and signature sizes are unchanged.
+- FN-DSA signatures are now a fixed length (666 / 1280 bytes, zero-padded) rather than
+  variable-length up to that size.
+
+### Test Coverage
+
+- **106 tests passing with `--features fndsa,hybrid`** (79 with neither feature, 99 with
+  `fndsa` only, 86 with `hybrid` only).
+- `cargo deny check` (advisories, bans, licenses, sources) passes cleanly with `--all-features`
+  — no accepted or ignored findings.
+- Verified against live `wasm32-unknown-unknown` builds: `--features fndsa`,
+  `--features wasm,fndsa,hybrid`.
+
 ## v0.1.0 (2026-08-01)
 
 ### Initial Release

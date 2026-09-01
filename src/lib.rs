@@ -11,9 +11,12 @@
 //!   - SHA2 variants: 128s/128f, 192s/192f, 256s/256f
 //!   - SHAKE variants: 128s/128f, 192s/192f, 256s/256f
 //!
-//! - **FN-DSA** (NIST FIPS 206 / Falcon) — requires `fndsa` feature (C FFI, not WASM)
+//! - **FN-DSA** (NIST FIPS 206 / Falcon) — requires `fndsa` feature, pure Rust, WASM-compatible
 //!   - [`fips206::FnDsa512Keypair`] — Security Level 1
 //!   - [`fips206::FnDsa1024Keypair`] — Security Level 5
+//!
+//! - **Hybrid Ed25519 + ML-DSA-65** — requires `hybrid` feature; classical/PQC combiner for migration bridging
+//!   - [`hybrid::HybridSigner`]
 //!
 //! ## Quick Start
 //!
@@ -68,9 +71,13 @@ pub mod fips204;
 /// SLH-DSA (NIST FIPS 205) — pure Rust, WASM-native.
 pub mod fips205;
 
-/// FN-DSA / Falcon (NIST FIPS 206) — requires `fndsa` feature (C FFI, not WASM).
+/// FN-DSA / Falcon (NIST FIPS 206) — requires `fndsa` feature, pure Rust, WASM-compatible.
 #[cfg(feature = "fndsa")]
 pub mod fips206;
+
+/// Hybrid classical + post-quantum signatures (Ed25519 + ML-DSA-65) — requires `hybrid` feature.
+#[cfg(feature = "hybrid")]
+pub mod hybrid;
 
 /// WASM bindings via `wasm-bindgen` — requires `wasm` feature.
 #[cfg(feature = "wasm")]
@@ -97,6 +104,10 @@ pub use fips205::{
 // FIPS 206 — FN-DSA (feature-gated)
 #[cfg(feature = "fndsa")]
 pub use fips206::{FnDsa512Keypair, FnDsa1024Keypair};
+
+// Hybrid Ed25519 + ML-DSA-65 (feature-gated)
+#[cfg(feature = "hybrid")]
+pub use hybrid::{HybridPublicKey, HybridSignature, HybridSigner};
 
 // ── Crate Metadata ────────────────────────────────────────────────────────────
 

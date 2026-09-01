@@ -7,6 +7,35 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [Unreleased]
+
+### Added
+
+- Hybrid Ed25519 + ML-DSA-65 combiner (`hybrid` feature) — `HybridSigner` produces both a
+  classical and a post-quantum signature; verification requires both to pass, with the
+  failing side identifiable in the error. Pure Rust, WASM-compatible.
+
+### Changed
+
+- `fndsa` feature migrated from `pqcrypto-falcon` (C FFI) to
+  [`fn-dsa`](https://crates.io/crates/fn-dsa) (pure Rust). `cargo build --target
+  wasm32-unknown-unknown --features fndsa` now succeeds; no C compiler is needed to build any
+  feature of this crate. Resolves RUSTSEC-2026-0165/0163/0162.
+- **BREAKING:** `FnDsa512Keypair::generate()` / `FnDsa1024Keypair::generate()` now require a
+  caller-provided RNG: `generate() -> SigResult<Self>` is now `generate<R: CryptoRng +
+  RngCore>(rng: &mut R) -> SigResult<Self>`. Migration: pass `&mut OsRng` (or any
+  `CryptoRng + RngCore`) — matches this crate's RNG convention everywhere else;
+  `pqcrypto-falcon` previously used its own internal RNG.
+- **BREAKING:** `FnDsa512Keypair::sign()` / `FnDsa1024Keypair::sign()` now also take a
+  caller-provided RNG: `sign(&self, message: &[u8]) -> SigResult<Signature>` is now
+  `sign<R: CryptoRng + RngCore>(&self, rng: &mut R, message: &[u8]) -> SigResult<Signature>`.
+  FN-DSA signing is randomized, unlike ML-DSA's deterministic signing.
+- **BREAKING:** FN-DSA secret key wire size changed: `SigAlgorithm::secret_key_size()` now
+  returns 1345 for `FnDsa512` (was 1281) and 2369 for `FnDsa1024` (was 2305) — `fn-dsa`'s own
+  encoded signing-key format, implementation-defined like the existing ML-DSA seed encoding.
+  A secret key serialized before this change cannot be loaded after it; regenerate keypairs.
+  Public key and signature sizes are unchanged.
+
 ## [0.1.0] - 2026-08-27
 
 ### Added

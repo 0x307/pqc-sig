@@ -39,35 +39,22 @@ gets caught on the next run rather than being pinned out of sight.
 
 ### Known and accepted advisories
 
-**The `advisories` check currently fails, and that is the expected, accepted state — not a
-broken build.** The advisories below are real and correct; they are accepted and documented
-here rather than silenced. `advisories.ignore` in `deny.toml` is deliberately empty: nothing
-is suppressed, so a *new* advisory landing on top of these still changes the output.
+**None currently.** `advisories.ignore` in `deny.toml` is deliberately empty: nothing is
+suppressed, so a new advisory landing on any dependency changes the `cargo-deny` output
+immediately rather than being silently absorbed.
 
-The upstream [PQClean](https://github.com/PQClean/PQClean) project — which provides the C
-implementations behind the `pqcrypto-*` crate family — [is being archived in or after July
-2026](https://github.com/PQClean/PQClean/issues/604). Every `pqcrypto-*` crate inherits an
-unmaintained advisory as a result.
+**Resolved 2026-09-01:** the `fndsa` feature previously bound FN-DSA/Falcon via
+`pqcrypto-falcon`, a C FFI wrapper around a PQClean reference implementation. PQClean —
+the upstream C implementation project — [is being archived in or after July
+2026](https://github.com/PQClean/PQClean/issues/604), which put three advisories on the
+`fndsa` feature (`pqcrypto-falcon` itself, plus `pqcrypto-internals` and `pqcrypto-traits`
+transitively): RUSTSEC-2026-0165, RUSTSEC-2026-0163, RUSTSEC-2026-0162. None was a known
+vulnerability — all three were "unmaintained upstream" advisories, and all three were
+already gated behind the non-default `fndsa` feature, so a default `cargo build`/`cargo
+test` never linked any of them.
 
-| Advisory | Crate | How it enters the build |
-|---|---|---|
-| [RUSTSEC-2026-0165](https://rustsec.org/advisories/RUSTSEC-2026-0165) | `pqcrypto-falcon` | `fndsa` feature (FN-DSA/Falcon) |
-| [RUSTSEC-2026-0163](https://rustsec.org/advisories/RUSTSEC-2026-0163) | `pqcrypto-internals` | via `pqcrypto-falcon`, same feature |
-| [RUSTSEC-2026-0162](https://rustsec.org/advisories/RUSTSEC-2026-0162) | `pqcrypto-traits` | via `pqcrypto-falcon`, same feature |
-
-**All three are behind the non-default `fndsa` feature.** This crate's `default = ["std"]`;
-a default `cargo build` or `cargo test` never links any of them. They appear in the scan
-only because `deny.toml` sets `all-features = true`. None is a known vulnerability — each is
-an "unmaintained upstream" advisory.
-
-**Why accepted rather than fixed:** the advisories reach a consumer only if that consumer
-explicitly opts into `fndsa`, which is exactly the point of gating it — the risk is visible
-at the moment you turn the feature on. There is no safe upgrade available; the fix is a
-migration, not a version bump.
-
-**Revisit trigger:** migrate the `fndsa` feature to [`fn-dsa`](https://crates.io/crates/fn-dsa)
-(pure Rust, actively maintained, WASM-capable). Independently of the advisory, the current
-`pqcrypto-falcon` binding is C FFI and **not WASM-compatible**, which is the stronger reason
-to move. Deferred, not urgent — the feature is off by default.
-
-Full analysis and the accept decision: `P1-06-cargo-deny-results.md` (2026-08-24).
+The `fndsa` feature was migrated from `pqcrypto-falcon` to
+[`fn-dsa`](https://crates.io/crates/fn-dsa) (Thomas Pornin, the original Falcon reference
+author) — pure Rust, actively maintained, and `wasm32-unknown-unknown`-compatible, which
+`pqcrypto-falcon`'s C FFI binding never was. This resolves all three advisories directly
+rather than accepting them, and removes the C-FFI/non-WASM limitation as a side effect.
