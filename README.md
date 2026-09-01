@@ -151,7 +151,7 @@ list, and not papered over with `continue-on-error`.
 
 ```toml
 [dependencies]
-pqc-sig = "0.1"
+pqc-sig = "0.2"
 ```
 
 ```rust,no_run
@@ -175,7 +175,7 @@ MlDsa65Keypair::verify(&pk, message, &signature).unwrap();
 Build with the `wasm` feature for `wasm32-unknown-unknown` targets:
 
 ```toml
-pqc-sig = { version = "0.1", default-features = false, features = ["wasm"] }
+pqc-sig = { version = "0.2", default-features = false, features = ["wasm"] }
 ```
 
 Or build the WASM binary directly:
@@ -232,7 +232,7 @@ deployments to PQC during migration: `HybridSigner` produces both signatures, an
 verification requires both to pass — an attacker must break both primitives to forge one.
 
 ```toml
-pqc-sig = { version = "0.1", features = ["hybrid"] }
+pqc-sig = { version = "0.2", features = ["hybrid"] }
 ```
 
 ```rust,ignore
@@ -301,7 +301,7 @@ The WIT interface is at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) and is also include
 This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
 
 ```toml
-pqc-sig = { version = "0.1", default-features = false }
+pqc-sig = { version = "0.2", default-features = false }
 ```
 
 ## Features
