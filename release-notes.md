@@ -1,5 +1,12 @@
 # pqc-sig Release Notes
 
+## v0.2.1 (2026-09-01)
+
+Docs-only fix: README.md and `src/lib.rs`'s doc-comment examples still pinned `pqc-sig =
+"0.1"` after the 0.2.0 release. Caught reviewing the published crates.io page — crates.io
+READMEs are immutable per version, so this needed a new release rather than an edit.
+Bumped all six version pins to `"0.2"`. No code or behavior change.
+
 ## v0.2.0 (2026-09-01)
 
 ### BREAKING: `SigPublicKey::to_multibase()` / `from_multibase()` now emit W3C Multikeys
