@@ -234,7 +234,11 @@ verification requires both to pass — an attacker must break both primitives to
 pqc-sig = { version = "0.1", features = ["hybrid"] }
 ```
 
-```rust,no_run
+```rust,ignore
+// Not run as a doctest: this README is included as the crate's top-level doc comment
+// (`#![doc = include_str!("../README.md")]`), which compiles unconditionally — the
+// `hybrid` feature isn't guaranteed enabled there. See `src/hybrid.rs` for the
+// feature-gated, actually-tested version of this example.
 use rand::rngs::OsRng;
 use pqc_sig::hybrid::HybridSigner;
 
