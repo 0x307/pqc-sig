@@ -1,6 +1,6 @@
 # pqc-sig Release Notes
 
-## Unreleased
+## v0.2.0 (2026-09-01)
 
 ### BREAKING: `SigPublicKey::to_multibase()` / `from_multibase()` now emit W3C Multikeys
 

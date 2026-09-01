@@ -55,7 +55,8 @@
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.1.0** | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
+| **v0.2.0** | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.0) |
+| v0.1.0 | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
 
 ## Algorithms
 
