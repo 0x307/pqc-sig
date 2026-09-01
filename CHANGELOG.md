@@ -7,6 +7,17 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [0.2.1] - 2026-09-01
+
+### Fixed
+
+- README.md and `src/lib.rs`'s doc-comment code examples still pinned `pqc-sig = "0.1"`.
+  Caught reviewing the published `0.2.0` crates.io page — since crates.io READMEs are
+  immutable per version, this could only be fixed by a new release. A caret range `"0.1"`
+  matches only `0.1.x`, so anyone following Quick Start (or the WASM/`no_std`/hybrid
+  examples) on `0.2.0` would have installed the old pre-0.2.0 crate, missing the `fndsa`
+  migration and the `hybrid` feature entirely. Docs-only change, not breaking.
+
 ## [0.2.0] - 2026-09-01
 
 ### Added

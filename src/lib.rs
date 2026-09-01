@@ -40,14 +40,14 @@
 //!
 //! Build with the `wasm` feature for `wasm32-unknown-unknown` targets:
 //! ```toml
-//! pqc-sig = { version = "0.1", features = ["wasm"] }
+//! pqc-sig = { version = "0.2", features = ["wasm"] }
 //! ```
 //!
 //! ## `no_std` Support
 //!
 //! This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
 //! ```toml
-//! pqc-sig = { version = "0.1", default-features = false }
+//! pqc-sig = { version = "0.2", default-features = false }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
