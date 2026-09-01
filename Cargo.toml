@@ -1,6 +1,6 @@
 [package]
 name        = "pqc-sig"
-version     = "0.1.0"
+version     = "0.2.0"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
@@ -29,9 +29,12 @@ pkcs8 = { version = "0.11", default-features = false, features = ["alloc"] }
 der  = { version = "0.8", default-features = false, features = ["alloc"] }
 spki = { version = "0.8", default-features = false, features = ["alloc"] }
 
-# FIPS 206 — FN-DSA / Falcon (C FFI, NOT WASM-compatible, feature-gated)
-pqcrypto-falcon = { version = "0.3", optional = true }
-pqcrypto-traits = { version = "0.3", optional = true }
+# FIPS 206 — FN-DSA / Falcon (pure Rust, no_std + alloc, WASM-compatible, feature-gated)
+fn-dsa = { version = "0.4", optional = true }
+
+# Hybrid Ed25519 + ML-DSA-65 combiner (pure Rust, no_std + alloc, WASM-compatible, feature-gated —
+# this crate is otherwise PQC-only)
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc", "zeroize", "rand_core"], optional = true }
 
 # RNG abstraction — caller provides RNG, no OsRng hardcoding in library code
 rand_core = { version = "0.6", default-features = false }
@@ -82,8 +85,11 @@ wasm = [
     "std",
 ]
 
-# fndsa: FN-DSA / Falcon via pqcrypto-falcon (C FFI, NOT WASM-compatible)
-fndsa = ["dep:pqcrypto-falcon", "dep:pqcrypto-traits"]
+# fndsa: FN-DSA / Falcon via fn-dsa (pure Rust, WASM-compatible)
+fndsa = ["dep:fn-dsa"]
+
+# hybrid: Ed25519 + ML-DSA-65 combiner via ed25519-dalek (pure Rust, WASM-compatible)
+hybrid = ["dep:ed25519-dalek"]
 
 [package.metadata.docs.rs]
 all-features = true

@@ -10,11 +10,11 @@
 [![FIPS 206](https://img.shields.io/badge/FIPS-206%20FN--DSA-orange.svg)](https://csrc.nist.gov/pubs/fips/206/ipd)
 
 > **Reading the badges:** **CI** is the build-and-test signal — it should be green, and a red
-> one means something is actually broken. **cargo-deny** is the dependency-advisory signal and
-> is **expected to be red**: the upstream PQClean project is being archived, so the
-> optional `fndsa` feature's dependencies carry unmaintained advisories that are
-> [known and accepted](SECURITY.md#known-and-accepted-advisories), not suppressed. A red
-> cargo-deny badge is the documented state, not a broken build.
+> one means something is actually broken. **cargo-deny** is the dependency-advisory signal —
+> also expected green. It previously carried an accepted-and-documented exception (the
+> optional `fndsa` feature depended on the now-archived `pqcrypto-falcon`); that dependency
+> was migrated to a pure-Rust, actively-maintained replacement, so there is currently nothing
+> accepted or suppressed — see [`SECURITY.md`](SECURITY.md#known-and-accepted-advisories).
 
 ## What runs today vs. what is designed
 
@@ -22,17 +22,21 @@
 
 - ML-DSA-44/65/87 (FIPS 204) and all 12 SLH-DSA parameter sets (FIPS 205) — pure Rust,
   `no_std` + `alloc`, directly compilable to `wasm32-unknown-unknown`, keygen/sign/verify
-  covered by integration tests (85 tests passing across the whole crate).
-- FN-DSA-512/1024 (Falcon, FIPS 206 draft) via C FFI (`pqcrypto-falcon`), gated behind the
-  `fndsa` feature flag — a real, working implementation, not a stub. Requires a C compiler.
-  **Not WASM-compatible**; use ML-DSA or SLH-DSA for WASM targets.
+  covered by integration tests.
+- FN-DSA-512/1024 (Falcon, FIPS 206 draft), gated behind the `fndsa` feature flag — pure
+  Rust via the `fn-dsa` crate, `no_std` + `alloc`, directly compilable to
+  `wasm32-unknown-unknown`. No C compiler needed.
+- Hybrid Ed25519 + ML-DSA-65, gated behind the `hybrid` feature flag — `HybridSigner`
+  combines a classical and a post-quantum signature; verification requires both to pass.
+  For bridging classical deployments to PQC during migration. Pure Rust, WASM-compatible.
 - `SigPublicKey::to_multibase()` / `from_multibase()` — W3C Multikey encoding for ML-DSA and
   SLH-DSA public keys, independently verified against the `multibase` and `ssi-multicodec`
   crates (see [`tests/ssi_interop_test.rs`](tests/ssi_interop_test.rs)). **Not implemented for
   FN-DSA** — no multicodec code is registered for it upstream yet; both functions return an
   error for `FnDsa512`/`FnDsa1024`.
 - WASM bindings (`wasm` feature, `wasm-bindgen`) for ML-DSA and SLH-DSA — see
-  [`src/wasm.rs`](src/wasm.rs). FN-DSA has no WASM bindings (it can't compile to `wasm32`).
+  [`src/wasm.rs`](src/wasm.rs). FN-DSA and the hybrid combiner have no WASM *bindings* yet
+  (though both now compile to `wasm32` — see above).
 - A WIT Component Model interface at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) describing the
   ML-DSA and SLH-DSA interfaces for non-Rust WASM runtimes.
 - CI (`.github/workflows/ci.yml`) builds and tests both default features and `--all-features`
@@ -51,7 +55,8 @@
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.1.0** | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
+| **v0.2.0** | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.0) |
+| v0.1.0 | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
 
 ## Algorithms
 
@@ -72,10 +77,10 @@
 | SLH-DSA-SHAKE-192f | FIPS 205 | 3 | 48 B | 35664 B | ✅ |
 | SLH-DSA-SHAKE-256s | FIPS 205 | 5 | 64 B | 29792 B | ✅ |
 | SLH-DSA-SHAKE-256f | FIPS 205 | 5 | 64 B | 49856 B | ✅ |
-| FN-DSA-512 (Falcon) | FIPS 206‡ | 1 | 897 B | ≤666 B | ❌* |
-| FN-DSA-1024 (Falcon) | FIPS 206‡ | 5 | 1793 B | ≤1280 B | ❌* |
+| FN-DSA-512 (Falcon) | FIPS 206‡ | 1 | 897 B | 666 B | ✅* |
+| FN-DSA-1024 (Falcon) | FIPS 206‡ | 5 | 1793 B | 1280 B | ✅* |
 
-*FN-DSA uses C FFI and is not WASM-compatible. Enable with `--features fndsa`.
+*FN-DSA is pure Rust and WASM-compatible. Enable with `--features fndsa`.
 ‡FIPS 206 (FN-DSA/Falcon) is not yet finalized; it is currently a draft standard pending ratification.
 
 **Recommended:** ML-DSA-65 for general use (best balance of security and performance).
@@ -91,21 +96,20 @@
   covers `cargo build`/`cargo check` only, not `cargo test`: a couple of this crate's
   dev-only interop-test dependencies need a newer toolchain, but dev-dependencies are never
   pulled in by downstream consumers.
-- **A C compiler** (`cc`, e.g. `gcc`/`clang` on Linux/macOS, MSVC on Windows) —
-  only needed to build the `fndsa` feature (FN-DSA/Falcon, via `pqcrypto-falcon`'s
-  C FFI). Not required for the default build. GitHub's `ubuntu-latest` runners
-  ship one out of the box.
-- No credentials, network services, or local files outside the repo are needed
-  to build or test this crate.
+- No C compiler, credentials, network services, or local files outside the repo are needed
+  to build or test this crate — every optional feature (`fndsa`, `hybrid`) is pure Rust.
 
 ## Safety
 
 This crate's own code contains **zero `unsafe`**, enforced by `#![forbid(unsafe_code)]` in
 [`src/lib.rs`](src/lib.rs) — this is true of the default build and every combination of this
-crate's own features. It is **not** true of the dependency graph as a whole: the optional
-`fndsa` feature pulls in `pqcrypto-falcon`, a real C FFI implementation, so enabling `fndsa`
-does bring `unsafe`/FFI code into the build (in that dependency, not in this crate). The
-default build (`fndsa` disabled) has no FFI anywhere in its dependency tree.
+crate's own features, and there is no C FFI anywhere in the dependency tree (the `fndsa`
+feature dropped its C FFI dependency — see [release notes](release-notes.md)). It is **not**
+true of the dependency graph as a whole in the stronger sense of "no `unsafe` anywhere": the
+optional `fndsa` feature (`fn-dsa`) and `hybrid` feature (`curve25519-dalek`, via
+`ed25519-dalek`) both use `unsafe` internally for architecture-specific performance paths
+(AVX2 intrinsics, native floating point) — safe Rust, not FFI, and gated behind non-default
+features. The default build has zero `unsafe` in its entire dependency tree.
 
 ## Continuous Integration
 
@@ -137,13 +141,11 @@ weekly on Mondays at 06:00 UTC. A failing scheduled run opens or updates a track
 labelled `security` / `cargo-deny`.
 
 It is a **separate workflow from `ci.yml` on purpose**, and it is **not a required status
-check**. The `advisories` check is expected to fail: the optional `fndsa` feature pulls in
-`pqcrypto-*` crates whose upstream (PQClean) is being archived. Those advisories are
-accepted and listed by RUSTSEC ID in
+check** — that stays true even now that the `advisories` check passes cleanly, since a future
+advisory landing on any dependency shouldn't block merges by default; it should surface
+visibly instead. Any accepted advisory would be listed by RUSTSEC ID in
 [`SECURITY.md`](./SECURITY.md#known-and-accepted-advisories) — not hidden with an ignore
-list, and not papered over with `continue-on-error`. Keeping the two workflows apart means
-the CI badge above stays a truthful build signal while the advisory signal stays visible on
-its own.
+list, and not papered over with `continue-on-error`.
 
 ## Quick Start
 
@@ -223,6 +225,33 @@ console.log("Valid:", valid); // true
 console.log("Version:", pqc_sig_version()); // "0.1.0"
 ```
 
+## Hybrid Signatures
+
+The opt-in `hybrid` feature adds an Ed25519 + ML-DSA-65 combiner for bridging classical
+deployments to PQC during migration: `HybridSigner` produces both signatures, and
+verification requires both to pass — an attacker must break both primitives to forge one.
+
+```toml
+pqc-sig = { version = "0.1", features = ["hybrid"] }
+```
+
+```rust,ignore
+// Not run as a doctest: this README is included as the crate's top-level doc comment
+// (`#![doc = include_str!("../README.md")]`), which compiles unconditionally — the
+// `hybrid` feature isn't guaranteed enabled there. See `src/hybrid.rs` for the
+// feature-gated, actually-tested version of this example.
+use rand::rngs::OsRng;
+use pqc_sig::hybrid::HybridSigner;
+
+let signer = HybridSigner::generate(&mut OsRng).unwrap();
+let pk = signer.public_key();
+
+let message = b"Hello, hybrid world!";
+let signature = signer.sign(message).unwrap();
+
+HybridSigner::verify(message, &signature, &pk).unwrap();
+```
+
 ## WASM Component Model
 
 The `wit/pqc-sig.wit` file defines the [WIT (WebAssembly Interface Types)](https://component-model.bytecodealliance.org/design/wit.html) interface for this library, enabling use as a WASM Component with any compliant runtime.
@@ -281,7 +310,8 @@ pqc-sig = { version = "0.1", default-features = false }
 |---------|-------------|
 | `std` (default) | Enable `std`-dependent trait impls |
 | `wasm` | Enable `wasm-bindgen` exports + JS entropy |
-| `fndsa` | Enable FN-DSA/Falcon via C FFI (NOT WASM-compatible) |
+| `fndsa` | Enable FN-DSA/Falcon (pure Rust, WASM-compatible) |
+| `hybrid` | Enable the Ed25519 + ML-DSA-65 hybrid combiner (pure Rust, WASM-compatible) |
 
 ## Algorithm Selection Guide
 
@@ -291,12 +321,13 @@ pqc-sig = { version = "0.1", default-features = false }
 | Maximum security | ML-DSA-87 (FIPS 204) |
 | Minimum key size | ML-DSA-44 (FIPS 204) |
 | WASM module integrity | SLH-DSA-SHA2-128s (FIPS 205) |
-| Compact signatures (non-WASM) | FN-DSA-512 (FIPS 206) |
+| Compact signatures | FN-DSA-512 (FIPS 206) |
 | Audit/long-term archival | ML-DSA-87 (FIPS 204) |
+| Bridging a classical deployment to PQC | Hybrid Ed25519 + ML-DSA-65 (`hybrid` feature) |
 
 ## Security Notes
 
-- **No classical cryptography** — this crate implements PQC-only algorithms
+- **PQC-only by default** — classical cryptography (Ed25519) is opt-in only via the `hybrid` feature, for migration bridging
 - **No KEM** — signatures only (see `pqc-kem` for key encapsulation)
 - **Caller-provided RNG** — no `OsRng` hardcoding in library code
 - **Zeroize on drop** — secret keys are automatically zeroed when dropped
@@ -313,7 +344,8 @@ pqc-sig/
 │   ├── wasm.rs         — wasm-bindgen exports (feature = "wasm")
 │   ├── fips204/        — ML-DSA (FIPS 204): ML-DSA-44/65/87
 │   ├── fips205/        — SLH-DSA (FIPS 205): 12 parameter sets
-│   └── fips206/        — FN-DSA (FIPS 206): Falcon-512/1024 (feature = "fndsa")
+│   ├── fips206/        — FN-DSA (FIPS 206): Falcon-512/1024 (feature = "fndsa")
+│   └── hybrid.rs       — Ed25519 + ML-DSA-65 combiner (feature = "hybrid")
 ├── tests/              — integration tests
 └── wit/                — WIT interface for WASM Component Model
 ```
@@ -339,10 +371,10 @@ change, deprecation notice, release cadence, and support posture.
 
 ## Security
 
-See [`SECURITY.md`](./SECURITY.md) to report a vulnerability.
-It also lists the known, accepted dependency advisories
-([RUSTSEC-2026-0162/0163/0165](./SECURITY.md#known-and-accepted-advisories), all behind the
-non-default `fndsa` feature) and the dependency-scanning setup.
+See [`SECURITY.md`](./SECURITY.md) to report a vulnerability. It also lists any known,
+accepted dependency advisories (currently none — see
+[`SECURITY.md`](./SECURITY.md#known-and-accepted-advisories)) and the dependency-scanning
+setup.
 
 ## Contributing
 

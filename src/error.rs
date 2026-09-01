@@ -47,6 +47,14 @@ pub enum SigError {
     #[error("algorithm '{name}' not available; enable feature '{feature}'")]
     AlgorithmNotAvailable { name: String, feature: String },
 
+    /// Hybrid signature verification failed on the classical (Ed25519) side.
+    #[error("hybrid verification failed: classical (Ed25519) signature invalid")]
+    HybridClassicalFailed,
+
+    /// Hybrid signature verification failed on the post-quantum (ML-DSA) side.
+    #[error("hybrid verification failed: post-quantum (ML-DSA) signature invalid")]
+    HybridPqcFailed,
+
     /// Generic internal error.
     #[error("internal error: {0}")]
     Internal(String),

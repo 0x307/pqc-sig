@@ -113,6 +113,10 @@ impl SigAlgorithm {
     /// For ML-DSA variants, this returns 32 (the seed size), which is the preferred
     /// serialization per the `ml-dsa` crate. The full expanded key form (2560/4032/4896 bytes)
     /// is deprecated in favor of the compact 32-byte seed.
+    ///
+    /// For FN-DSA variants, this is the `fn-dsa` crate's own encoded signing-key format
+    /// (1345/2369 bytes), not the raw 1281/2305-byte NIST secret-key size — implementation-defined,
+    /// like the ML-DSA seed above.
     pub fn secret_key_size(&self) -> usize {
         match self {
             SigAlgorithm::MlDsa44           => 32,
@@ -130,8 +134,8 @@ impl SigAlgorithm {
             SigAlgorithm::SlhDsaShake192f   => 96,
             SigAlgorithm::SlhDsaShake256s   => 128,
             SigAlgorithm::SlhDsaShake256f   => 128,
-            SigAlgorithm::FnDsa512          => 1281,
-            SigAlgorithm::FnDsa1024         => 2305,
+            SigAlgorithm::FnDsa512          => 1345,
+            SigAlgorithm::FnDsa1024         => 2369,
         }
     }
 
@@ -480,14 +484,14 @@ impl SignedMessage {
 
 // ── Serde Helpers ─────────────────────────────────────────────────────────────
 
-fn serialize_bytes_base64url<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_bytes_base64url<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     serializer.serialize_str(&Base64Url::encode_string(bytes))
 }
 
-fn deserialize_bytes_base64url<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+pub(crate) fn deserialize_bytes_base64url<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
