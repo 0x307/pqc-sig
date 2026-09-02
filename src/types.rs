@@ -179,10 +179,13 @@ impl SigAlgorithm {
     }
 
     /// Returns the [multicodec](https://github.com/multiformats/multicodec) code for this
-    /// algorithm's public key, as registered (draft status) in the multicodec table.
+    /// algorithm's public key.
     ///
-    /// FN-DSA (FIPS 206 / Falcon) has no registered multicodec code as of this writing, so
-    /// `to_multibase`/`from_multibase` are not supported for `FnDsa512`/`FnDsa1024`.
+    /// ML-DSA and SLH-DSA codes (`0x1210`–`0x122b`) are registered (draft status) in the
+    /// upstream multicodec table. FN-DSA (FIPS 206 / Falcon) has **no upstream-registered**
+    /// multicodec code as of this writing — see [`FN_DSA_PRIVATE_USE_BASE`] for the
+    /// provisional, 0x307-namespaced private-use codes this crate assigns instead, and its
+    /// doc comment for the full rationale, scope, and revisit trigger.
     pub fn multicodec_code(&self) -> SigResult<u32> {
         match self {
             SigAlgorithm::MlDsa44         => Ok(0x1210),
@@ -200,15 +203,83 @@ impl SigAlgorithm {
             SigAlgorithm::SlhDsaShake256s => Ok(0x1229),
             SigAlgorithm::SlhDsaSha2_256f => Ok(0x122a),
             SigAlgorithm::SlhDsaShake256f => Ok(0x122b),
-            SigAlgorithm::FnDsa512 | SigAlgorithm::FnDsa1024 => {
-                Err(SigError::InvalidPublicKey(alloc::format!(
-                    "{} has no registered multicodec code; multibase encoding is not supported for FN-DSA",
-                    self.as_str()
-                )))
-            }
+            // Provisional, 0x307-reserved private-use codes -- see
+            // `FN_DSA_PRIVATE_USE_BASE` doc comment below for full rationale.
+            SigAlgorithm::FnDsa512  => Ok(FN_DSA_PRIVATE_USE_BASE),
+            SigAlgorithm::FnDsa1024 => Ok(FN_DSA_PRIVATE_USE_BASE + 1),
         }
     }
+
+    /// Returns `true` if this algorithm's [`multicodec_code`](Self::multicodec_code) is one of
+    /// this crate's own provisional private-use reservations (currently just FN-DSA), rather
+    /// than an upstream-registered multiformats/multicodec table entry.
+    ///
+    /// Useful for callers who want to warn, log, or otherwise flag when a DID Document /
+    /// Multikey they're producing embeds a non-standard code that other multicodec
+    /// implementations will not recognize.
+    pub fn is_private_use_multicodec(&self) -> bool {
+        matches!(self, SigAlgorithm::FnDsa512 | SigAlgorithm::FnDsa1024)
+    }
 }
+
+/// Base of the **provisional, `0x307`-reserved private-use multicodec range** used for
+/// FN-DSA (FIPS 206 / Falcon), because [multiformats/multicodec] has no registered code for
+/// FN-DSA/Falcon as of this writing (checked against the live table during the P2/alpha-001
+/// implementation pass — no PR, issue, or merged entry exists for FN-DSA/Falcon at either
+/// `0x1213` (the next sequential slot after ML-DSA's `0x1210`-`0x1212` block) or elsewhere).
+///
+/// [multiformats/multicodec]: https://github.com/multiformats/multicodec
+///
+/// # Decision (per project owner: "reserve and don't block upstream")
+///
+/// Rather than leaving `to_multibase()`/`from_multibase()` permanently erroring for FN-DSA
+/// until an upstream PR lands (outside 0x307's control, no committed timeline), this crate
+/// provisionally reserves its own private-use block:
+///
+/// - **`0x307000`** — `FN-DSA-512` (`SigAlgorithm::FnDsa512`)
+/// - **`0x307001`** — `FN-DSA-1024` (`SigAlgorithm::FnDsa1024`)
+///
+/// `0x307000` is deliberately namespaced after this organization (`0x307`) rather than picked
+/// arbitrarily, so a code walking a DID Document that hits an unrecognized `0x307xxx`
+/// multicodec prefix has an immediate, greppable clue about its provenance. The
+/// `0x307000`-`0x3070ff` block (256 codes) is reserved for this purpose, of which only the
+/// first two are in use today — headroom for any future 0x307-authored algorithm that hits
+/// the same "real, no upstream multicodec yet" situation FN-DSA is in now.
+///
+/// # This is intentionally *not* a claim about the officially blessed "Private Use Area"
+///
+/// The multicodec table's own header comments describe a reserved application-specific /
+/// private-use block in the `0x300000`-`0x3fffff` range, and `0x307000` happens to fall
+/// inside it — which is a reasonable coincidence given `0x307`'s own numeric name, not proof
+/// this crate re-verified that exact boundary byte-for-byte against the live `table.csv`.
+/// **Before this crate's FN-DSA Multikey output is ever consumed by a system this
+/// organization does not control, re-confirm `0x307000`-`0x3070ff` against the current
+/// upstream table** (or complete the real registration PR, which supersedes this reservation
+/// entirely — see the revisit trigger below).
+///
+/// # Consequences and caveats
+///
+/// - **Interop scope: 0x307-controlled systems only.** Any multibase-encoded FN-DSA public
+///   key produced by [`SigPublicKey::to_multibase`] carries this provisional code. A
+///   generic/independent multicodec-table-driven decoder (one that doesn't know about
+///   `0x307000`/`0x307001` specifically) will not recognize it as FN-DSA — it isn't in the
+///   canonical table. This is fine for internal SAGP DID documents (the actual, current use
+///   case — see `docs/pqc/migration.md`'s FN-DSA-as-compact-signature design), but it is
+///   **not** a substitute for real interop with third-party multicodec/DID tooling.
+/// - **Not a breaking change to ship now.** `multicodec_code()` previously returned
+///   `Err(..)` for FN-DSA (0.1.0) — turning that into `Ok(..)` is purely additive per
+///   `STABILITY.md` §2 ("adding a new public function/return value that previously errored
+///   is not breaking unless callers depended on the error"). Nothing in 0.1.0 could have
+///   depended on a specific error variant here being permanent, since the doc comment always
+///   described this as "not yet supported," not "will never be supported."
+/// - **Revisit trigger:** if/when multiformats/multicodec registers an official code for
+///   FN-DSA/Falcon, migrate `multicodec_code()` to that value in a follow-up **minor**
+///   release (changing an already-provisional, explicitly-flagged-non-final code is not the
+///   same kind of break as changing an already-stable one — but it does still change the
+///   wire bytes of anything encoded with `0x307000`/`0x307001` in the interim, so it must
+///   still carry a `CHANGELOG.md` migration note per `STABILITY.md`, and any 0x307-internal
+///   system that persisted FN-DSA Multikeys before that point needs a re-encode pass).
+pub const FN_DSA_PRIVATE_USE_BASE: u32 = 0x307000;
 
 /// Encode a multicodec code as an unsigned varint (LEB128, per the
 /// [multiformats unsigned-varint spec](https://github.com/multiformats/unsigned-varint)).
@@ -293,7 +364,11 @@ impl SigPublicKey {
     /// Encode as a [W3C Multikey](https://www.w3.org/TR/controller-document/#multikey):
     /// a multicodec-prefixed key, multibase-encoded as base58btc with a 'z' prefix.
     ///
-    /// Returns an error for algorithms with no registered multicodec code (currently FN-DSA).
+    /// Works for all 17 algorithms this crate supports, including FN-DSA — which uses a
+    /// provisional, `0x307`-reserved private-use multicodec code rather than an
+    /// upstream-registered one; see [`FN_DSA_PRIVATE_USE_BASE`] for the full rationale and
+    /// interop scope. In practice this only returns `Err` for malformed/mismatched input, not
+    /// for any currently-defined [`SigAlgorithm`] variant.
     pub fn to_multibase(&self) -> SigResult<String> {
         let code = self.algorithm.multicodec_code()?;
         let mut prefixed = encode_varint(code);

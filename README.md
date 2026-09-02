@@ -22,15 +22,22 @@
 
 - ML-DSA-44/65/87 (FIPS 204) and all 12 SLH-DSA parameter sets (FIPS 205) — pure Rust,
   `no_std` + `alloc`, directly compilable to `wasm32-unknown-unknown`, keygen/sign/verify
-  covered by integration tests (85 tests passing across the whole crate).
-- FN-DSA-512/1024 (Falcon, FIPS 206 draft) via C FFI (`pqcrypto-falcon`), gated behind the
-  `fndsa` feature flag — a real, working implementation, not a stub. Requires a C compiler.
-  **Not WASM-compatible**; use ML-DSA or SLH-DSA for WASM targets.
-- `SigPublicKey::to_multibase()` / `from_multibase()` — W3C Multikey encoding for ML-DSA and
-  SLH-DSA public keys, independently verified against the `multibase` and `ssi-multicodec`
-  crates (see [`tests/ssi_interop_test.rs`](tests/ssi_interop_test.rs)). **Not implemented for
-  FN-DSA** — no multicodec code is registered for it upstream yet; both functions return an
-  error for `FnDsa512`/`FnDsa1024`.
+  covered by integration tests (86 tests passing by default; 105 with `--features fndsa`).
+- **FN-DSA-512/1024 (Falcon, FIPS 206 draft)** via C FFI (`pqcrypto-falcon`), gated behind the
+  `fndsa` feature flag — **production-usable today, not provisional**: a real, working,
+  tested implementation. Requires a C compiler. **Not WASM-compatible**; use ML-DSA or
+  SLH-DSA for WASM targets. `fndsa` stays non-default because this crate's primary posture
+  is WASM-first, not because FN-DSA itself is unfinished. See "When to choose FN-DSA over
+  ML-DSA" below for guidance on when its smaller keys/signatures are worth the C-FFI
+  tradeoff.
+- `SigPublicKey::to_multibase()` / `from_multibase()` — W3C Multikey encoding for **all 17**
+  algorithms, including FN-DSA. ML-DSA/SLH-DSA use officially registered (draft-status)
+  multicodec codes, independently verified against the `multibase` and `ssi-multicodec`
+  crates (see [`tests/ssi_interop_test.rs`](tests/ssi_interop_test.rs)). **FN-DSA uses a
+  provisional, `0x307`-reserved private-use multicodec code** (`0x307000`/`0x307001`) instead
+  — see [`src/types.rs`](src/types.rs)'s `FN_DSA_PRIVATE_USE_BASE` doc comment for the full
+  rationale and interop scope (0x307-controlled systems, not generic third-party multicodec
+  decoders, until/unless upstream registers a real code).
 - WASM bindings (`wasm` feature, `wasm-bindgen`) for ML-DSA and SLH-DSA — see
   [`src/wasm.rs`](src/wasm.rs). FN-DSA has no WASM bindings (it can't compile to `wasm32`).
 - A WIT Component Model interface at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) describing the
@@ -38,14 +45,42 @@
 - CI (`.github/workflows/ci.yml`) builds and tests both default features and `--all-features`
   on every push/PR, including against the packaged `cargo package` artifact.
 
-**Designed, not yet implemented:**
+**Designed, not yet implemented / provisional:**
 
-- FN-DSA Multikey support — blocked on a multicodec code being registered upstream for
-  FIPS 206/Falcon; tracked, not something this crate can unilaterally resolve.
+- FN-DSA Multikey support uses this crate's own **provisional** private-use multicodec
+  codes, not an upstream-registered one — no PR/issue exists yet for FIPS 206/Falcon at
+  multiformats/multicodec, and getting one merged is outside 0x307's unilateral control.
+  Tracked as a revisit trigger in `FN_DSA_PRIVATE_USE_BASE`'s doc comment; migrating to a
+  real code (if/when registered) is a follow-up minor release, not a rewrite.
 - FIPS 206 itself is a NIST **draft** standard, not yet finalized (see the FN-DSA badge above)
   — the implementation tracks the draft and may need breaking changes once it's finalized.
 - MSRV, `unsafe` code policy, and docs.rs metadata are now stated below (see
   [Build Requirements](#build-requirements) and [Safety](#safety)).
+
+## When to choose FN-DSA over ML-DSA
+
+Both are NIST post-quantum signature standards; the choice is a tradeoff, not a strict
+upgrade in either direction:
+
+| | **ML-DSA-65** (recommended default) | **FN-DSA-512** |
+|---|---|---|
+| Public key | 1952 bytes | 897 bytes |
+| Signature | ≤3309 bytes | ≤666 bytes |
+| WASM-compatible | ✅ Yes (pure Rust) | ❌ No (C FFI via `pqcrypto-falcon`) |
+| Dependency | Pure Rust (`ml-dsa`) | C FFI (`pqcrypto-falcon`) |
+| Multikey encoding | Officially registered multicodec | Provisional `0x307` private-use code |
+| Side-channel history | None known | Falcon's reference floating-point sampling has a documented history of non-constant-time implementations in some revisions (see `SECURITY.md`) |
+
+**Choose FN-DSA when:** signature/key size is the binding constraint (e.g. bandwidth-limited
+transport, on-chain storage, high-frequency signing where payload size dominates), the
+signing/verifying context is **native only** (never inside a `wasm32-wasip1` guest — this
+matters for SAGP's WASM-guest architecture specifically), and you can accept a C-FFI
+dependency plus the current lack of upstream Multikey standardization.
+
+**Choose ML-DSA when:** you need WASM compatibility, you want to stay on the pure-Rust /
+zero-FFI default build, or Multikey interop with third-party (non-0x307) multicodec tooling
+matters — which is the common case, hence ML-DSA-65 remaining this crate's
+[`PRIMARY_ALGORITHM`](src/lib.rs).
 
 ## Release
 
@@ -323,7 +358,7 @@ pqc-sig/
 ### v0.1.0 (2026-08-01) — Initial Release
 
 - **17 algorithms implemented**: ML-DSA-44/65/87, all 12 SLH-DSA variants, FN-DSA-512/1024
-- **85 tests passing** (66 without Falcon, 85 with `--features fndsa`)
+- **105 tests passing with `--features fndsa`** (86 without Falcon)
 - **WASM-compatible**: ML-DSA (all 3 variants) + SLH-DSA (all 12 variants) compile to `wasm32-unknown-unknown`
 - **WIT Component Model interface** at `wit/pqc-sig.wit`
 - Standalone crate — no workspace coupling, `no_std` + `alloc`

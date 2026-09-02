@@ -82,9 +82,81 @@ fn multibase_rejects_missing_z_prefix() {
     assert!(err.is_err());
 }
 
+// ── FN-DSA — provisional 0x307 private-use multicodec range ──────────────────
+//
+// FN-DSA now has a working (though provisional, non-upstream-registered)
+// multicodec code -- see `SigAlgorithm::FN_DSA_PRIVATE_USE_BASE`'s doc comment
+// in src/types.rs for the full rationale. These tests exercise the same
+// to_multibase()/from_multibase() round-trip as the registered-code
+// algorithms above, plus the `is_private_use_multicodec()` flag.
+
 #[test]
-fn fn_dsa_multibase_unsupported() {
+fn fn_dsa_512_multicodec_code_is_private_use_base() {
+    assert_eq!(SigAlgorithm::FnDsa512.multicodec_code().unwrap(), 0x307000);
+    assert!(SigAlgorithm::FnDsa512.is_private_use_multicodec());
+}
+
+#[test]
+fn fn_dsa_1024_multicodec_code_is_private_use_base_plus_one() {
+    assert_eq!(SigAlgorithm::FnDsa1024.multicodec_code().unwrap(), 0x307001);
+    assert!(SigAlgorithm::FnDsa1024.is_private_use_multicodec());
+}
+
+#[test]
+fn registered_algorithms_are_not_private_use() {
+    for algo in [
+        SigAlgorithm::MlDsa44, SigAlgorithm::MlDsa65, SigAlgorithm::MlDsa87,
+        SigAlgorithm::SlhDsaSha2_128s, SigAlgorithm::SlhDsaShake256f,
+    ] {
+        assert!(!algo.is_private_use_multicodec(), "{:?}", algo);
+    }
+}
+
+#[test]
+fn fn_dsa_512_multibase_roundtrip() {
+    let bytes = deterministic_bytes(SigAlgorithm::FnDsa512.public_key_size());
+    let pk = SigPublicKey::new(SigAlgorithm::FnDsa512, bytes.clone());
+    let encoded = pk.to_multibase().expect("FN-DSA-512 encode must succeed (provisional code)");
+    assert!(encoded.starts_with('z'));
+
+    let decoded = SigPublicKey::from_multibase(SigAlgorithm::FnDsa512, &encoded)
+        .expect("FN-DSA-512 decode must succeed");
+    assert_eq!(decoded.bytes, bytes);
+}
+
+#[test]
+fn fn_dsa_1024_multibase_roundtrip() {
+    let bytes = deterministic_bytes(SigAlgorithm::FnDsa1024.public_key_size());
+    let pk = SigPublicKey::new(SigAlgorithm::FnDsa1024, bytes.clone());
+    let encoded = pk.to_multibase().expect("FN-DSA-1024 encode must succeed (provisional code)");
+    assert!(encoded.starts_with('z'));
+
+    let decoded = SigPublicKey::from_multibase(SigAlgorithm::FnDsa1024, &encoded)
+        .expect("FN-DSA-1024 decode must succeed");
+    assert_eq!(decoded.bytes, bytes);
+}
+
+#[test]
+fn fn_dsa_multibase_rejects_wrong_variant() {
+    // FN-DSA-512 bytes encoded, then decoded as FN-DSA-1024 -- the embedded
+    // multicodec code (0x307000) won't match FN-DSA-1024's (0x307001).
     let pk = SigPublicKey::new(SigAlgorithm::FnDsa512, deterministic_bytes(SigAlgorithm::FnDsa512.public_key_size()));
-    assert!(pk.to_multibase().is_err());
-    assert!(SigPublicKey::from_multibase(SigAlgorithm::FnDsa1024, "zAnything").is_err());
+    let encoded = pk.to_multibase().expect("encode failed");
+    let err = SigPublicKey::from_multibase(SigAlgorithm::FnDsa1024, &encoded);
+    assert!(err.is_err());
+}
+
+#[test]
+fn fn_dsa_multibase_does_not_collide_with_registered_codes() {
+    // Sanity check that the provisional 0x307000/0x307001 codes can never be
+    // confused with any of the registered ML-DSA/SLH-DSA codes (0x1210-0x122b)
+    // at the varint level -- decoding a registered-code multibase string as
+    // FN-DSA (or vice versa) must fail, not silently misinterpret.
+    let ml_dsa_pk = SigPublicKey::new(SigAlgorithm::MlDsa44, deterministic_bytes(SigAlgorithm::MlDsa44.public_key_size()));
+    let ml_dsa_encoded = ml_dsa_pk.to_multibase().expect("encode failed");
+    assert!(SigPublicKey::from_multibase(SigAlgorithm::FnDsa512, &ml_dsa_encoded).is_err());
+
+    let fn_dsa_pk = SigPublicKey::new(SigAlgorithm::FnDsa512, deterministic_bytes(SigAlgorithm::FnDsa512.public_key_size()));
+    let fn_dsa_encoded = fn_dsa_pk.to_multibase().expect("encode failed");
+    assert!(SigPublicKey::from_multibase(SigAlgorithm::MlDsa44, &fn_dsa_encoded).is_err());
 }

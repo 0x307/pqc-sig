@@ -11,9 +11,14 @@
 //!   - SHA2 variants: 128s/128f, 192s/192f, 256s/256f
 //!   - SHAKE variants: 128s/128f, 192s/192f, 256s/256f
 //!
-//! - **FN-DSA** (NIST FIPS 206 / Falcon) — requires `fndsa` feature (C FFI, not WASM)
+//! - **FN-DSA** (NIST FIPS 206 / Falcon) — real, production-usable, tested today (native
+//!   targets only; requires `fndsa` feature, C FFI, not WASM-compatible — `fndsa` stays
+//!   non-default for this crate's WASM-first posture, not because it's provisional)
 //!   - [`fips206::FnDsa512Keypair`] — Security Level 1
 //!   - [`fips206::FnDsa1024Keypair`] — Security Level 5
+//!   - Multikey/DID Document encoding works via a provisional `0x307`-reserved private-use
+//!     multicodec code (no upstream multiformats/multicodec registration exists yet) — see
+//!     [`types::FN_DSA_PRIVATE_USE_BASE`].
 //!
 //! ## Quick Start
 //!

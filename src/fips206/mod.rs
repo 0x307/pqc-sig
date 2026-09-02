@@ -1,14 +1,27 @@
 //! FIPS 206 — FN-DSA (Falcon) Digital Signature Algorithm
 //!
-//! **IMPORTANT:** This module requires the `fndsa` feature flag and uses C FFI
-//! via `pqcrypto-falcon`. It is **NOT compatible with `wasm32-unknown-unknown`**.
-//! Use ML-DSA (FIPS 204) for WASM targets.
+//! **This is a real, production-usable, tested implementation today** — native targets
+//! only (C FFI via `pqcrypto-falcon`), gated behind the non-default `fndsa` feature. It is
+//! **NOT compatible with `wasm32-unknown-unknown`**; use ML-DSA (FIPS 204) for WASM targets.
+//! `fndsa` stays non-default on purpose (WASM-first ecosystem posture), not because the
+//! implementation itself is provisional.
 //!
 //! Implements both parameter sets:
 //! - [`FnDsa512Keypair`]  — Security Level 1, 897-byte public key, 666-byte signature
 //! - [`FnDsa1024Keypair`] — Security Level 5, 1793-byte public key, 1280-byte signature
 //!
 //! All implementations use the `pqcrypto-falcon` crate (C FFI wrapper).
+//!
+//! # Multikey / DID Document encoding
+//!
+//! [`crate::types::SigPublicKey::to_multibase`]/`from_multibase` work for FN-DSA public
+//! keys using a **provisional, `0x307`-reserved private-use multicodec code**
+//! (`0x307000`/`0x307001`), since [multiformats/multicodec] has no registered code for
+//! FN-DSA/Falcon upstream. See [`crate::types::FN_DSA_PRIVATE_USE_BASE`]'s doc comment for
+//! the full rationale, interop scope (0x307-controlled systems, not generic third-party
+//! multicodec decoders), and the revisit trigger for when/if upstream registers a real code.
+//!
+//! [multiformats/multicodec]: https://github.com/multiformats/multicodec
 
 pub mod fn_dsa_512;
 pub mod fn_dsa_1024;
