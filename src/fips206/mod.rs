@@ -6,6 +6,17 @@
 //! Implements both parameter sets:
 //! - [`FnDsa512Keypair`]  — Security Level 1, 897-byte public key, 666-byte signature
 //! - [`FnDsa1024Keypair`] — Security Level 5, 1793-byte public key, 1280-byte signature
+//!
+//! # Multikey / DID Document encoding
+//!
+//! [`crate::types::SigPublicKey::to_multibase`]/`from_multibase` work for FN-DSA public
+//! keys using a **provisional, `0x307`-reserved private-use multicodec code**
+//! (`0x307000`/`0x307001`), since [multiformats/multicodec] has no registered code for
+//! FN-DSA/Falcon upstream. See [`crate::types::FN_DSA_PRIVATE_USE_BASE`]'s doc comment for
+//! the full rationale, interop scope (0x307-controlled systems, not generic third-party
+//! multicodec decoders), and the revisit trigger for when/if upstream registers a real code.
+//!
+//! [multiformats/multicodec]: https://github.com/multiformats/multicodec
 
 pub mod fn_dsa_512;
 pub mod fn_dsa_1024;

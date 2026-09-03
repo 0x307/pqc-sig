@@ -9,21 +9,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Five independent jobs, run in parallel, each a genuine clean-room build:
+# Seven independent jobs, run in parallel, each a genuine clean-room build:
 # fresh checkout, fresh toolchain, no actions/cache. They cover:
 #   - working tree,      default features
 #   - working tree,      --all-features
 #   - packaged .crate,   default features
 #   - packaged .crate,   --all-features
 #   - working tree,      pinned MSRV toolchain (build only, both feature sets)
+#   - pqc-sig-wasm,       wasm32 cdylib artifact (CRA-3)
+#   - downstream-consumer-fixture, no_std/std-leak regression (CRA-3)
 # Splitting these into parallel jobs (rather than one job running them all in
 # sequence) turns ~60 real minutes into whatever the slowest single job takes
 # (SLH-DSA's "s" parameter sets are the dominant cost in every job). Because
-# none of the five `needs:` each other, the wall-clock duration GitHub reports
+# none of the seven `needs:` each other, the wall-clock duration GitHub reports
 # for the whole run (visible on the run's summary page / via the API) *is*
 # the critical path across them — that number is the "clone-to-green time"
 # for 0X3-31, not any single job's own elapsed time. Each job still logs its
 # own elapsed time below for diagnosing which stage is slow.
+#
+# The two CRA-3 jobs deliberately do NOT run the full test suite (the
+# SLH-DSA suite alone takes ~7.5 minutes locally) — they only build, which is
+# all that's needed to prove the crate-split defect they exist to catch is
+# actually fixed. Every other job here only ever built pqc-sig by itself;
+# neither would have caught this defect, since it's only observable from a
+# consumer's build graph.
 jobs:
   default:
     name: Build & test (default features)
@@ -222,10 +231,60 @@ jobs:
           END=$(date +%s)
           echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
 
+  wasm-cdylib-build:
+    name: pqc-sig-wasm (wasm32 cdylib artifact)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone, no cache)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (fresh, no cache, wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: cargo build --target wasm32-unknown-unknown --no-default-features
+        working-directory: pqc-sig-wasm
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --locked --verbose
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  downstream-consumer:
+    name: Downstream consumer (no_std + external std leak, wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone, no cache)
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (fresh, no cache, wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: cargo build --target wasm32-unknown-unknown
+        working-directory: tests/downstream-consumer-fixture
+        run: cargo build --target wasm32-unknown-unknown --locked --verbose
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
   clone-to-green:
     name: Record clone-to-green time
     runs-on: ubuntu-latest
-    needs: [default, all-features, packaged-default, packaged-all-features, msrv]
+    needs: [default, all-features, packaged-default, packaged-all-features, msrv, wasm-cdylib-build, downstream-consumer]
     if: always()
     steps:
       - name: Report critical-path duration
@@ -234,7 +293,7 @@ jobs:
             echo "### Clone-to-green time"
             echo "This run's total wall-clock duration (visible on this workflow"
             echo "run's summary page, or via \`gh run view ${{ github.run_id }}\`)"
-            echo "is the clone-to-green time: the four build/test jobs above run"
+            echo "is the clone-to-green time: the seven build/test jobs above run"
             echo "in parallel with no shared cache, so the run's total duration"
             echo "is their critical path, not a sum of job minutes."
           } | tee -a "$GITHUB_STEP_SUMMARY"

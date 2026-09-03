@@ -1,6 +1,12 @@
-//! WASM bindings for `pqc-sig` via `wasm-bindgen`.
+//! WASM/JS bindings for `pqc-sig`, via `wasm-bindgen`.
 //!
-//! These bindings expose post-quantum signature operations to JavaScript/TypeScript.
+//! This crate IS the final linked artifact (`crate-type = ["cdylib"]`, see
+//! Cargo.toml) — the standalone `.wasm` module `build-wasm.ps1` produces. It
+//! depends on `pqc-sig` as an ordinary `no_std` library and supplies the
+//! `#[global_allocator]`/`#[panic_handler]` lang items that a standalone
+//! `no_std` binary needs (`pqc-sig` itself never does — see its own
+//! src/lib.rs).
+//!
 //! All byte arrays cross the WASM boundary as `Uint8Array`.
 //! All errors are returned as JavaScript `Error` objects (via `Result<T, JsValue>`).
 //!
@@ -8,32 +14,45 @@
 //! ```javascript
 //! import init, {
 //!   WasmMlDsa65Keypair,
-//!   WasmMlDsa44Keypair,
-//!   WasmMlDsa87Keypair,
-//!   WasmSlhDsaSha2_128sKeypair,
-//!   WasmSlhDsaSha2_192sKeypair,
-//!   WasmSlhDsaSha2_256sKeypair,
-//!   WasmSlhDsaShake192sKeypair,
-//!   WasmSlhDsaShake256sKeypair,
 //!   ml_dsa_65_verify,
 //! } from './pqc_sig.js';
 //!
 //! await init();
 //!
-//! // ML-DSA-65 (recommended)
 //! const keypair = new WasmMlDsa65Keypair();
 //! const pubKeyBytes = keypair.public_key_bytes();
 //! const signature = keypair.sign(new TextEncoder().encode("Hello, world!"));
 //! const valid = ml_dsa_65_verify(pubKeyBytes, new TextEncoder().encode("Hello, world!"), signature);
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
+#![forbid(unsafe_code)]
+
+#[cfg(not(feature = "std"))]
 extern crate alloc;
+#[cfg(not(feature = "std"))]
 use alloc::{string::{String, ToString}, vec::Vec};
+
+// ── no_std runtime hooks ─────────────────────────────────────────────────────
+// Unlike pqc-sig (an ordinary rlib library that must never claim these --
+// see its src/lib.rs), this crate's crate-type is unconditionally
+// ["cdylib"]: it IS the final linked artifact by construction, so it's
+// always correct for it to supply them when std is off.
+
+#[cfg(not(feature = "std"))]
+#[global_allocator]
+static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
+
+#[cfg(not(feature = "std"))]
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
 
 use wasm_bindgen::prelude::*;
 
-use crate::fips204::{MlDsa44Keypair, MlDsa65Keypair, MlDsa87Keypair};
-use crate::fips205::{
+use pqc_sig::fips204::{MlDsa44Keypair, MlDsa65Keypair, MlDsa87Keypair};
+use pqc_sig::fips205::{
     SlhDsaSha2_128sKeypair, SlhDsaSha2_128fKeypair,
     SlhDsaSha2_192sKeypair, SlhDsaSha2_192fKeypair,
     SlhDsaSha2_256sKeypair, SlhDsaSha2_256fKeypair,
@@ -41,19 +60,51 @@ use crate::fips205::{
     SlhDsaShake192sKeypair, SlhDsaShake192fKeypair,
     SlhDsaShake256sKeypair, SlhDsaShake256fKeypair,
 };
-use crate::types::{SigAlgorithm, SigPublicKey, Signature};
+use pqc_sig::types::{SigAlgorithm, SigPublicKey, Signature};
 
 // ── RNG for WASM ──────────────────────────────────────────────────────────────
-// In WASM, we use getrandom which hooks into window.crypto.getRandomValues()
-// The `getrandom/js` feature must be enabled (set in Cargo.toml under [features] wasm).
+// In WASM, entropy comes from window.crypto.getRandomValues() via getrandom
+// 0.4's `wasm_js` backend. Not `rand_core::OsRng` + getrandom 0.2: that
+// combination pulls in `js-sys`'s default (`std`) feature transitively
+// (getrandom 0.2.17's own wasm32 `js-sys` dependency edge doesn't disable
+// it), which links real `std` into this artifact -- fatal for the no_std
+// build, whose whole point is supplying std's lang items itself (above).
+// getrandom 0.4's `wasm_js` backend disables default features throughout
+// its own dependency edges, so it doesn't have this problem.
 
-fn wasm_rng() -> rand_core::OsRng {
-    rand_core::OsRng
+struct WasmCryptoRng;
+
+impl rand_core::RngCore for WasmCryptoRng {
+    fn next_u32(&mut self) -> u32 {
+        rand_core::impls::next_u32_via_fill(self)
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        rand_core::impls::next_u64_via_fill(self)
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        getrandom::fill(dest).expect("browser CSPRNG (getrandom) failed");
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        getrandom::fill(dest).map_err(|_| {
+            rand_core::Error::from(
+                core::num::NonZeroU32::new(rand_core::Error::CUSTOM_START).unwrap(),
+            )
+        })
+    }
+}
+
+impl rand_core::CryptoRng for WasmCryptoRng {}
+
+fn wasm_rng() -> WasmCryptoRng {
+    WasmCryptoRng
 }
 
 // ── Error Conversion ──────────────────────────────────────────────────────────
 
-fn to_js_error(e: crate::error::SigError) -> JsValue {
+fn to_js_error(e: pqc_sig::SigError) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
 
@@ -656,13 +707,13 @@ pub fn slh_dsa_shake_256f_verify(public_key_bytes: &[u8], message: &[u8], signat
 /// Returns the crate version string.
 #[wasm_bindgen]
 pub fn pqc_sig_version() -> String {
-    crate::VERSION.into()
+    pqc_sig::VERSION.into()
 }
 
 /// Returns the primary algorithm identifier string.
 #[wasm_bindgen]
 pub fn primary_algorithm() -> String {
-    crate::PRIMARY_ALGORITHM.into()
+    pqc_sig::PRIMARY_ALGORITHM.into()
 }
 
 /// Returns the expected public key size in bytes for the given algorithm name.

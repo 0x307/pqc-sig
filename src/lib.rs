@@ -14,6 +14,9 @@
 //! - **FN-DSA** (NIST FIPS 206 / Falcon) — requires `fndsa` feature, pure Rust, WASM-compatible
 //!   - [`fips206::FnDsa512Keypair`] — Security Level 1
 //!   - [`fips206::FnDsa1024Keypair`] — Security Level 5
+//!   - Multikey/DID Document encoding works via a provisional `0x307`-reserved private-use
+//!     multicodec code (no upstream multiformats/multicodec registration exists yet) — see
+//!     [`types::FN_DSA_PRIVATE_USE_BASE`].
 //!
 //! - **Hybrid Ed25519 + ML-DSA-65** — requires `hybrid` feature; classical/PQC combiner for migration bridging
 //!   - [`hybrid::HybridSigner`]
@@ -38,16 +41,14 @@
 //!
 //! ## WASM Usage
 //!
-//! Build with the `wasm` feature for `wasm32-unknown-unknown` targets:
-//! ```toml
-//! pqc-sig = { version = "0.2", features = ["wasm"] }
-//! ```
+//! This crate is a pure library (rlib-only) and is never built as a standalone WASM
+//! artifact itself. For WASM/JS bindings, use the sibling `pqc-sig-wasm` crate.
 //!
 //! ## `no_std` Support
 //!
 //! This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
 //! ```toml
-//! pqc-sig = { version = "0.2", default-features = false }
+//! pqc-sig = { version = "0.3", default-features = false }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -78,10 +79,6 @@ pub mod fips206;
 /// Hybrid classical + post-quantum signatures (Ed25519 + ML-DSA-65) — requires `hybrid` feature.
 #[cfg(feature = "hybrid")]
 pub mod hybrid;
-
-/// WASM bindings via `wasm-bindgen` — requires `wasm` feature.
-#[cfg(feature = "wasm")]
-pub mod wasm;
 
 // ── Top-Level Re-exports ──────────────────────────────────────────────────────
 
