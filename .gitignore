@@ -8,3 +8,12 @@ Cargo.lock
 # doesn't reach them.
 pqc-sig-wasm/target
 tests/downstream-consumer-fixture/target
+
+# Both are artifact-shaped crates (like pqc-kem-wasm), not libraries -- their
+# lock files ARE committed for reproducible CI builds (`cargo build --locked`
+# in ci.yml), unlike the root Cargo.lock above, which follows the usual
+# library-crate convention of leaving lockfile pinning to downstream
+# consumers. The bare `Cargo.lock` pattern above would otherwise swallow
+# these nested ones too.
+!pqc-sig-wasm/Cargo.lock
+!tests/downstream-consumer-fixture/Cargo.lock
