@@ -1,12 +1,14 @@
 name: cargo-deny
 
-# Separate from ci.yml on purpose (Ed, 2026-08-25). This workflow is EXPECTED to fail:
-# the PQClean project upstream of the `pqcrypto-*` family is being archived, so the
-# `fndsa`-gated dependencies carry unmaintained advisories that are accepted, not fixed
-# (see P1-06 and the "Known and accepted advisories" section of SECURITY.md). Keeping it
-# out of ci.yml means the main CI badge stays green and honest while this advisory signal
-# stays visible on its own badge. This workflow is deliberately NOT a required status
-# check — "non-blocking" in that sense only, never in the sense of hiding its failures.
+# Separate from ci.yml on purpose (Ed, 2026-08-25). It previously carried an
+# accepted-and-documented exception: the PQClean project upstream of the `pqcrypto-*`
+# family was being archived, so the `fndsa`-gated dependencies carried unmaintained
+# advisories (RUSTSEC-2026-0165/0163/0162) that were accepted, not fixed. `fndsa` was
+# migrated off `pqcrypto-falcon` to the pure-Rust `fn-dsa` crate on 2026-09-01 (see
+# "Known and accepted advisories" in SECURITY.md), so this workflow currently has no
+# accepted advisory and is expected to pass cleanly. Kept as a separate, non-required
+# status check anyway — see P1-06 — so a *future* advisory surfaces on its own badge
+# without blocking merges by default, rather than being folded into ci.yml's green/red.
 
 on:
   push:
@@ -82,10 +84,10 @@ jobs:
               `failed, and record the decision in this repo's dependency-review notes:`,
               `resolved, accepted, or blocking.`,
               ``,
-              `**Note:** the \`advisories\` check is expected to fail on the accepted PQClean`,
-              `advisories listed in SECURITY.md. Compare this run's output against that list`,
-              `before treating it as new — the point of this issue is to catch an advisory`,
-              `that is *not* already on it.`,
+              `**Note:** \`deny.toml\`'s \`advisories.ignore\` is currently empty (see`,
+              `"Known and accepted advisories" in SECURITY.md) — any failure here is a new`,
+              `advisory, not an already-accepted one. If it should be accepted going forward,`,
+              `record it in SECURITY.md and add it to \`advisories.ignore\` explicitly.`,
             ].join("\n");
             if (already) {
               await github.rest.issues.createComment({
