@@ -1,18 +1,23 @@
 [package]
 name        = "pqc-sig"
-version     = "0.2.1"
+version     = "0.3.0"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
 description = "Post-quantum digital signatures: ML-DSA (FIPS 204), SLH-DSA (FIPS 205), FN-DSA (FIPS 206) — standalone WASM-compatible"
 license     = "MIT OR Apache-2.0"
 repository  = "https://github.com/0x307/pqc-sig"
-keywords    = ["post-quantum", "signatures", "ml-dsa", "slh-dsa", "wasm"]
-categories  = ["cryptography", "wasm"]
+keywords    = ["post-quantum", "signatures", "ml-dsa", "slh-dsa"]
+categories  = ["cryptography"]
 
+# This crate is a pure library (rlib-only) — it is NEVER the final linked artifact, and
+# so never defines #[global_allocator]/#[panic_handler] itself (only the final binary
+# knows whether std is available elsewhere in the link; a library can't validly infer
+# that from its own feature flags). The standalone WASM cdylib artifact that DOES need
+# those lang items lives in the sibling pqc-sig-wasm/ crate — see its own Cargo.toml.
 [lib]
 name       = "pqc_sig"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 # ── Core PQC — Pure Rust, no_std capable, WASM-compatible ────────────────────
 
@@ -58,13 +63,6 @@ subtle = { version = "2", default-features = false }
 # Error handling — no_std compatible
 thiserror = { version = "2", default-features = false }
 
-# Optional: WASM bindings
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys       = { version = "0.3", optional = true }
-
-# Optional: WASM entropy (required for getrandom in wasm32-unknown-unknown)
-getrandom = { version = "0.2", optional = true }
-
 [features]
 default = ["std"]
 
@@ -73,16 +71,6 @@ std = [
     "serde/std",
     "serde_json/std",
     "zeroize/std",
-]
-
-# wasm: enables wasm32-unknown-unknown target + JS entropy
-wasm = [
-    "dep:wasm-bindgen",
-    "dep:js-sys",
-    "dep:getrandom",
-    "getrandom/js",
-    "rand_core/getrandom",
-    "std",
 ]
 
 # fndsa: FN-DSA / Falcon via fn-dsa (pure Rust, WASM-compatible)

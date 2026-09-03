@@ -7,6 +7,72 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [0.3.0] - 2026-09-02
+
+Per `STABILITY.md` §2/§4, this is a breaking release — two independent pieces of work land
+together (see "Migration from 0.2.x" below).
+
+### Added
+
+- New sibling crate [`pqc-sig-wasm`](pqc-sig-wasm/) (`publish = false`) — the standalone
+  `wasm32-unknown-unknown` cdylib artifact and JS bindings for ML-DSA and SLH-DSA, split out
+  of the root crate. Unconditionally supplies `#[global_allocator]`/`#[panic_handler]`, since
+  it is always the final linked artifact by construction.
+- New CI jobs: `pqc-sig-wasm (wasm32 cdylib artifact)` builds the real WASM artifact with
+  `--no-default-features`; `Downstream consumer (no_std + external std leak, wasm32)` builds
+  `tests/downstream-consumer-fixture/`, a minimal crate that reproduces the class of defect
+  this release fixes — no pre-existing CI job could have caught it, since every one of them
+  built the crate by itself rather than from a consumer's build graph.
+- **Provisional, `0x307`-reserved private-use multicodec codes for FN-DSA**: `0x307000`
+  (`FN-DSA-512`) and `0x307001` (`FN-DSA-1024`). `SigAlgorithm::multicodec_code()` now
+  returns `Ok(..)` for both (previously `Err(..)`, since no upstream multiformats/multicodec
+  code is registered for FN-DSA/Falcon). `SigPublicKey::to_multibase()` / `from_multibase()`
+  therefore now work for FN-DSA public keys, producing valid W3C Multikey output that
+  independently-written decoders (`multibase` + `ssi-multicodec`) correctly parse
+  structurally — see `tests/ssi_interop_test.rs`. This is a **provisional** reservation, not
+  an upstream registration; see `src/types.rs`'s `FN_DSA_PRIVATE_USE_BASE` doc comment for the
+  full rationale, interop scope (0x307-controlled systems only, not generic third-party
+  multicodec tooling), and the revisit trigger for migrating to a real code if/when
+  multiformats/multicodec registers one.
+- `SigAlgorithm::is_private_use_multicodec()` — returns `true` for FN-DSA (currently the only
+  private-use entries), `false` for the upstream-registered ML-DSA/SLH-DSA codes, so callers
+  can flag/log non-standard Multikey output if they care.
+- New multibase round-trip tests for FN-DSA-512/1024 in `tests/multibase_tests.rs`
+  (round-trip, cross-variant rejection, no collision with registered codes) and new
+  independent-decoder structural-validity tests in `tests/ssi_interop_test.rs`.
+
+### Changed
+
+- **BREAKING:** `[lib] crate-type` narrowed from `["cdylib", "rlib"]` to `["rlib"]`. The root
+  crate is now a pure library and never the final linked artifact.
+- **BREAKING:** the `wasm` feature and `src/wasm.rs` are removed from this crate — that
+  surface moved to `pqc-sig-wasm`, it is not duplicated.
+- Added "When to choose FN-DSA over ML-DSA" guidance to `README.md`, and corrected its WASM
+  compatibility framing (FN-DSA has been pure-Rust and WASM-compatible since `0.2.0`'s
+  `fn-dsa` migration).
+- `tests/ssi_interop_test.rs`'s `fn_dsa_has_no_multikey_to_validate` test (which asserted
+  `to_multibase()` *fails* for FN-DSA) is replaced by
+  `fn_dsa_512_is_structurally_valid_multikey_per_independent_decoder` /
+  `fn_dsa_1024_is_structurally_valid_multikey_per_independent_decoder`, which assert it
+  *succeeds* and independently validates — the old test's premise (no multicodec code exists)
+  is what this release changes.
+
+### Migration from 0.2.x
+
+- **Library consumers of `pqc-sig` (the common case): no change needed.** `cargo add
+  pqc-sig` / `pqc-sig = "0.3"` is enough, unless you were previously enabling
+  `features = ["wasm"]` on `pqc-sig` directly — see below.
+- **If you consumed `pqc-sig`'s WASM/JS bindings, or built `pqc-sig` itself with
+  `--features wasm`:** that surface moved to the new `pqc-sig-wasm` crate. The compiled JS/TS
+  API is unchanged; only the Rust-side crate producing it changed. If you build the WASM
+  artifact yourself, point your build at `pqc-sig-wasm/` (or `build-wasm.ps1`) instead of
+  `pqc-sig/`.
+- **If you called `SigAlgorithm::multicodec_code()`, `SigPublicKey::to_multibase()`, or
+  `from_multibase()` on `FnDsa512`/`FnDsa1024` and depended on the `Err` result:** these now
+  return `Ok(..)` with a provisional private-use code. Call
+  `SigAlgorithm::is_private_use_multicodec()` if you need to distinguish provisional from
+  upstream-registered codes in your own logic.
+
 ## [0.2.1] - 2026-09-01
 
 ### Fixed

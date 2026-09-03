@@ -1,0 +1,47 @@
+# Regression fixture for CRA-3 (Linear) -- see ../../src/lib.rs and
+# ../../pqc-sig-wasm/Cargo.toml for the fuller writeup of what changed.
+#
+# This is a deliberately separate crate, not a `tests/*.rs` integration test,
+# because the defect it catches is only observable from a *consumer's* build
+# graph: it depends on pqc-sig as an ordinary no_std library
+# (`default-features = false`) while separately depending on its own
+# `getrandom` with the `js` feature -- a dependency that, when targeting
+# wasm32-unknown-unknown, links real `std` via wasm-bindgen's default
+# feature, regardless of this crate's own no_std-ness.
+#
+# Before the CRA-3 fix, pqc-sig defined NO `#[global_allocator]`/
+# `#[panic_handler]` at all, so `cargo build --no-default-features` for a
+# standalone no_std wasm32 consumer failed outright ("no global memory
+# allocator found", "`#[panic_handler]` function required, but not found").
+# Building pqc-sig by itself never observes this: a second build of the
+# crate itself does not reproduce it. Only a real consumer graph like this
+# one does.
+#
+# CRA-3's fix moved the standalone WASM cdylib artifact (and the lang items
+# it must supply) into the sibling `pqc-sig-wasm/` crate; pqc-sig's own
+# `[lib] crate-type` is now `["rlib"]` only, since Cargo builds ALL declared
+# crate-types for a dependency regardless of what the consumer actually
+# needs -- a `cdylib` declaration on pqc-sig itself would force the lang-item
+# question onto every consumer, including ones (like this fixture, and like
+# a native-std consumer) that don't want it.
+#
+# This fixture must fail to build on the pre-CRA-3 crate and succeed after
+# (CI job `downstream-consumer` in ../../.github/workflows/ci.yml).
+#
+# `[workspace]` below makes this its own workspace root, independent of the
+# parent pqc-sig crate -- not part of any implicit workspace.
+
+[package]
+name = "pqc-sig-downstream-consumer-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pqc-sig = { path = "../..", default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
+
+[workspace]

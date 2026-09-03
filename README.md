@@ -29,33 +29,71 @@
 - Hybrid Ed25519 + ML-DSA-65, gated behind the `hybrid` feature flag — `HybridSigner`
   combines a classical and a post-quantum signature; verification requires both to pass.
   For bridging classical deployments to PQC during migration. Pure Rust, WASM-compatible.
-- `SigPublicKey::to_multibase()` / `from_multibase()` — W3C Multikey encoding for ML-DSA and
-  SLH-DSA public keys, independently verified against the `multibase` and `ssi-multicodec`
-  crates (see [`tests/ssi_interop_test.rs`](tests/ssi_interop_test.rs)). **Not implemented for
-  FN-DSA** — no multicodec code is registered for it upstream yet; both functions return an
-  error for `FnDsa512`/`FnDsa1024`.
-- WASM bindings (`wasm` feature, `wasm-bindgen`) for ML-DSA and SLH-DSA — see
-  [`src/wasm.rs`](src/wasm.rs). FN-DSA and the hybrid combiner have no WASM *bindings* yet
-  (though both now compile to `wasm32` — see above).
+- `SigPublicKey::to_multibase()` / `from_multibase()` — W3C Multikey encoding for **all 17**
+  algorithms, including FN-DSA. ML-DSA/SLH-DSA use officially registered (draft-status)
+  multicodec codes, independently verified against the `multibase` and `ssi-multicodec`
+  crates (see [`tests/ssi_interop_test.rs`](tests/ssi_interop_test.rs)).
+
+  > **⚠️ FN-DSA Multikey codes are provisional, not upstream-registered.** `to_multibase()`/
+  > `from_multibase()` encode FN-DSA-512/1024 public keys using a private-use multicodec code
+  > this project self-assigned (`0x307000`/`0x307001`), because
+  > [multiformats/multicodec](https://github.com/multiformats/multicodec) has no registered
+  > code for FN-DSA/Falcon as of this writing (checked against the live table; no open PR or
+  > issue for it either). `SigAlgorithm::is_private_use_multicodec()` flags this at runtime so
+  > callers can warn when they're producing a non-standard Multikey. **Interop scope:
+  > 0x307-controlled systems only** — a generic third-party multicodec decoder will not
+  > recognize `0x307000`/`0x307001` as FN-DSA. **Revisit trigger:** if/when
+  > `multiformats/multicodec` merges a real FN-DSA/Falcon code, `multicodec_code()` migrates to
+  > it in a follow-up minor release (tracked in [`src/types.rs`](src/types.rs)'s
+  > `FN_DSA_PRIVATE_USE_BASE` doc comment, which has the full rationale).
+- Standalone WASM/JS bindings for ML-DSA and SLH-DSA live in the sibling
+  [`pqc-sig-wasm`](pqc-sig-wasm/) crate (see [WASM Usage](#wasm-usage) below) — this crate
+  itself is a pure library (`rlib`-only) and is never the final linked WASM artifact. FN-DSA
+  and the hybrid combiner have no WASM *bindings* yet (though both compile to `wasm32` as a
+  library dependency — see above).
 - A WIT Component Model interface at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) describing the
   ML-DSA and SLH-DSA interfaces for non-Rust WASM runtimes.
 - CI (`.github/workflows/ci.yml`) builds and tests both default features and `--all-features`
-  on every push/PR, including against the packaged `cargo package` artifact.
+  on every push/PR, including against the packaged `cargo package` artifact, the
+  `pqc-sig-wasm` cdylib artifact, and a downstream-consumer fixture that would otherwise mask
+  a `no_std`/`std`-leak regression (see [Continuous Integration](#continuous-integration)).
 
-**Designed, not yet implemented:**
+**Designed, not yet implemented / provisional:**
 
-- FN-DSA Multikey support — blocked on a multicodec code being registered upstream for
-  FIPS 206/Falcon; tracked, not something this crate can unilaterally resolve.
 - FIPS 206 itself is a NIST **draft** standard, not yet finalized (see the FN-DSA badge above)
   — the implementation tracks the draft and may need breaking changes once it's finalized.
 - MSRV, `unsafe` code policy, and docs.rs metadata are now stated below (see
   [Build Requirements](#build-requirements) and [Safety](#safety)).
 
+## When to choose FN-DSA over ML-DSA
+
+Both are NIST post-quantum signature standards; the choice is a tradeoff, not a strict
+upgrade in either direction:
+
+| | **ML-DSA-65** (recommended default) | **FN-DSA-512** |
+|---|---|---|
+| Public key | 1952 bytes | 897 bytes |
+| Signature | ≤3309 bytes | ≤666 bytes |
+| WASM-compatible (as a library dependency) | ✅ Yes (pure Rust) | ✅ Yes (pure Rust, via `fn-dsa`) |
+| Dependency | Pure Rust (`ml-dsa`) | Pure Rust (`fn-dsa`) |
+| Multikey encoding | Officially registered multicodec | Provisional `0x307` private-use code |
+| Side-channel history | None known | Falcon's reference floating-point sampling has a documented history of non-constant-time implementations in some revisions (see `SECURITY.md`) |
+
+**Choose FN-DSA when:** signature/key size is the binding constraint (e.g. bandwidth-limited
+transport, on-chain storage, high-frequency signing where payload size dominates) and you can
+accept the current lack of upstream Multikey standardization (see the provisional-codes
+callout above).
+
+**Choose ML-DSA when:** Multikey interop with third-party (non-0x307) multicodec tooling
+matters — which is the common case, hence ML-DSA-65 remaining this crate's
+[`PRIMARY_ALGORITHM`](src/lib.rs).
+
 ## Release
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.2.1** | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.1) |
+| **v0.3.0** | 2026-09-02 | [crates.io](https://crates.io/crates/pqc-sig/0.3.0) |
+| v0.2.1 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.1) |
 | v0.2.0 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.0) |
 | v0.1.0 | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
 
@@ -118,7 +156,7 @@ features. The default build has zero `unsafe` in its entire dependency tree.
 a fresh GitHub-hosted runner with no dependency or build caching — every run is a genuine
 clean-room build.
 
-Five jobs:
+Seven jobs:
 
 - **Default features (build + test)** — `cargo build` / `cargo test` with default features.
   The crate's supported surface; must always pass.
@@ -132,6 +170,16 @@ Five jobs:
   [Build Requirements](#build-requirements)) against the pinned MSRV toolchain, not `stable`.
   Fails the moment any code or dependency bump relies on a newer language feature than the
   declared `rust-version`.
+- **`pqc-sig-wasm` (wasm32 cdylib artifact)** — builds the real standalone WASM artifact,
+  `cargo build --target wasm32-unknown-unknown --no-default-features` in `pqc-sig-wasm/`.
+  This is the job that would have caught the crate-split defect this repo used to have —
+  every other job only ever built the root crate by itself.
+- **Downstream consumer (no_std + external std leak, wasm32)** — builds
+  [`tests/downstream-consumer-fixture`](tests/downstream-consumer-fixture/), a minimal crate
+  depending on `pqc-sig` with `default-features = false` alongside an independent `getrandom`
+  dependency that leaks real `std` via `wasm-bindgen` on `wasm32` regardless of `pqc-sig`'s
+  own `no_std`-ness. A second build of `pqc-sig` alone proves nothing here — only a
+  consumer's build graph exposes this class of regression.
 
 ## Dependency scanning
 
@@ -152,7 +200,7 @@ list, and not papered over with `continue-on-error`.
 
 ```toml
 [dependencies]
-pqc-sig = "0.2"
+pqc-sig = "0.3"
 ```
 
 ```rust,no_run
@@ -173,16 +221,17 @@ MlDsa65Keypair::verify(&pk, message, &signature).unwrap();
 
 ## WASM Usage
 
-Build with the `wasm` feature for `wasm32-unknown-unknown` targets:
+`pqc-sig` itself is a pure library (`rlib`-only) and is never built as a standalone WASM
+artifact — Cargo builds every declared crate-type for a package regardless of what a
+consumer needs, so a `cdylib` declaration here would force the `#[global_allocator]`/
+`#[panic_handler]` lang-item question onto every consumer, including ones that already have
+their own `std`. The sibling [`pqc-sig-wasm`](pqc-sig-wasm/) crate exists specifically to be
+that final artifact.
 
-```toml
-pqc-sig = { version = "0.2", default-features = false, features = ["wasm"] }
-```
-
-Or build the WASM binary directly:
+Build the WASM binary via the sibling crate:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File pqc-sig/build.ps1
+powershell -ExecutionPolicy Bypass -File build-wasm.ps1
 ```
 
 ### JavaScript/TypeScript
@@ -233,7 +282,7 @@ deployments to PQC during migration: `HybridSigner` produces both signatures, an
 verification requires both to pass — an attacker must break both primitives to forge one.
 
 ```toml
-pqc-sig = { version = "0.2", features = ["hybrid"] }
+pqc-sig = { version = "0.3", features = ["hybrid"] }
 ```
 
 ```rust,ignore
@@ -302,7 +351,7 @@ The WIT interface is at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) and is also include
 This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
 
 ```toml
-pqc-sig = { version = "0.2", default-features = false }
+pqc-sig = { version = "0.3", default-features = false }
 ```
 
 ## Features
@@ -310,7 +359,6 @@ pqc-sig = { version = "0.2", default-features = false }
 | Feature | Description |
 |---------|-------------|
 | `std` (default) | Enable `std`-dependent trait impls |
-| `wasm` | Enable `wasm-bindgen` exports + JS entropy |
 | `fndsa` | Enable FN-DSA/Falcon (pure Rust, WASM-compatible) |
 | `hybrid` | Enable the Ed25519 + ML-DSA-65 hybrid combiner (pure Rust, WASM-compatible) |
 
@@ -342,12 +390,13 @@ pqc-sig/
 │   ├── lib.rs          — crate root, re-exports, no_std gate
 │   ├── error.rs        — SigError enum, SigResult alias
 │   ├── types.rs        — wire types (SigPublicKey, SigSecretKey, Signature, SignedMessage)
-│   ├── wasm.rs         — wasm-bindgen exports (feature = "wasm")
 │   ├── fips204/        — ML-DSA (FIPS 204): ML-DSA-44/65/87
 │   ├── fips205/        — SLH-DSA (FIPS 205): 12 parameter sets
 │   ├── fips206/        — FN-DSA (FIPS 206): Falcon-512/1024 (feature = "fndsa")
 │   └── hybrid.rs       — Ed25519 + ML-DSA-65 combiner (feature = "hybrid")
+├── pqc-sig-wasm/       — sibling crate: the standalone WASM cdylib artifact + JS bindings
 ├── tests/              — integration tests
+│   └── downstream-consumer-fixture/  — regression fixture for the no_std/std-leak defect
 └── wit/                — WIT interface for WASM Component Model
 ```
 
@@ -356,7 +405,7 @@ pqc-sig/
 ### v0.1.0 (2026-08-01) — Initial Release
 
 - **17 algorithms implemented**: ML-DSA-44/65/87, all 12 SLH-DSA variants, FN-DSA-512/1024
-- **85 tests passing** (66 without Falcon, 85 with `--features fndsa`)
+- **105 tests passing with `--features fndsa`** (86 without Falcon)
 - **WASM-compatible**: ML-DSA (all 3 variants) + SLH-DSA (all 12 variants) compile to `wasm32-unknown-unknown`
 - **WIT Component Model interface** at `wit/pqc-sig.wit`
 - Standalone crate — no workspace coupling, `no_std` + `alloc`
