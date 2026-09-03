@@ -67,11 +67,19 @@ fn slh_dsa_shake_256f_is_valid_multikey_per_independent_decoder() {
     assert_independently_valid_multikey(SigAlgorithm::SlhDsaShake256f);
 }
 
-/// FN-DSA has no registered multicodec code, so `to_multibase()` correctly refuses to produce
-/// output rather than emitting a non-conformant Multikey. Nothing for an independent decoder to
-/// validate here.
+/// FN-DSA has no *upstream-registered* multicodec code, but this crate now assigns it a
+/// provisional, `0x307`-reserved private-use code (see `FN_DSA_PRIVATE_USE_BASE` in
+/// src/types.rs). `ssi-multicodec` decodes generically by varint code number -- it doesn't
+/// need to semantically recognize `0x307000`/`0x307001` as "FN-DSA" to confirm the wire
+/// format itself (varint prefix + trailing key bytes) is structurally well-formed, which is
+/// exactly what this test validates. This is *not* a claim that other systems' multicodec
+/// tables know what `0x307000` means -- only that the encoding is not malformed.
 #[test]
-fn fn_dsa_has_no_multikey_to_validate() {
-    let pk = SigPublicKey::new(SigAlgorithm::FnDsa512, deterministic_bytes(SigAlgorithm::FnDsa512.public_key_size()));
-    assert!(pk.to_multibase().is_err());
+fn fn_dsa_512_is_structurally_valid_multikey_per_independent_decoder() {
+    assert_independently_valid_multikey(SigAlgorithm::FnDsa512);
+}
+
+#[test]
+fn fn_dsa_1024_is_structurally_valid_multikey_per_independent_decoder() {
+    assert_independently_valid_multikey(SigAlgorithm::FnDsa1024);
 }
