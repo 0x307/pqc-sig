@@ -58,6 +58,31 @@ pub enum SigError {
     /// Generic internal error.
     #[error("internal error: {0}")]
     Internal(String),
+
+    /// Domain-separation context string exceeds the FIPS 204/205/206 255-byte maximum.
+    ///
+    /// FIPS 204 §5.2, FIPS 205 §10.2, and the FIPS 206 (draft) `DomainContext` construction
+    /// all encode the context length in a single byte, capping it at 255 bytes. Returned by
+    /// every `sign_ctx`/`sign_ctx_deterministic`/`verify_ctx` method before it would
+    /// otherwise hit an opaque error from the underlying `ml-dsa`/`slh-dsa`/`fn-dsa` crate.
+    #[error("context string too long: {len} bytes (max 255)")]
+    ContextTooLong { len: usize },
+
+    /// Pre-hash digest length does not match the expected output size of the named
+    /// hash function (FIPS 204 §5.4.1 / FIPS 205 §10.2.2).
+    ///
+    /// Returned by every `sign_prehash`/`sign_prehash_deterministic`/`verify_prehash`
+    /// method before it would otherwise sign/verify a malformed digest.
+    #[error("digest length for {hash} must be {expected} bytes, got {got}")]
+    InvalidDigestLength { hash: &'static str, expected: usize, got: usize },
+
+    /// Pre-hash collision strength is weaker than the signature algorithm's required
+    /// security strength (FIPS 204 §5.4 / FIPS 205 §10.2.2).
+    ///
+    /// For example, `PreHash::Sha256` (128-bit collision strength) is rejected for
+    /// `MlDsa65Keypair`/`MlDsa87Keypair` (192/256-bit security strength).
+    #[error("pre-hash {hash} ({strength}-bit collision strength) is too weak for {algorithm} (requires >= {required} bits)")]
+    PreHashTooWeak { hash: &'static str, strength: u32, algorithm: &'static str, required: u32 },
 }
 
 impl SigError {

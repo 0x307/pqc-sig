@@ -1,6 +1,6 @@
 [package]
 name        = "pqc-sig"
-version     = "0.3.1"
+version     = "0.4.0"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
@@ -82,9 +82,26 @@ hybrid = ["dep:ed25519-dalek"]
 [package.metadata.docs.rs]
 all-features = true
 
+# ── Examples ──────────────────────────────────────────────────────────────────
+# `hybrid_bridge` uses the `hybrid`-gated pqc_sig::hybrid module and ed25519-dalek
+# directly; `required-features` keeps `cargo build --examples` (default features, no
+# `hybrid`) green while `cargo build --examples --all-features` still compiles it.
+[[example]]
+name = "hybrid_bridge"
+required-features = ["hybrid"]
+
 [dev-dependencies]
 rand    = { version = "0.8", features = ["std"] }
 hex     = "0.4"
+
+# Used only by examples/tests to compute pre-hash digests (S-4). The library itself
+# never hashes on the caller's behalf — see src/prehash.rs.
+sha2    = "0.10"
+
+# Used only by examples/gen_kat_vectors.rs and tests/kat_tests.rs (S-5) to compute
+# SHA3/SHAKE pre-hash digests for the published KAT vectors — same "caller hashes"
+# rule as sha2 above.
+sha3    = "0.10"
 
 # Independent multibase/multicodec implementations for interop testing (test-only, not
 # runtime deps): validates our to_multibase() output against decoders we did not write.

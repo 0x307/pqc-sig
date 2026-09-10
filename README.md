@@ -3,18 +3,34 @@
 **Post-quantum digital signatures** — a standalone, WASM-compatible Rust library implementing NIST-standardized post-quantum signature algorithms.
 
 [![CI](https://github.com/0x307/pqc-sig/actions/workflows/ci.yml/badge.svg)](https://github.com/0x307/pqc-sig/actions/workflows/ci.yml)
+[![wasm](https://github.com/0x307/pqc-sig/actions/workflows/wasm.yml/badge.svg)](https://github.com/0x307/pqc-sig/actions/workflows/wasm.yml)
 [![cargo-deny](https://github.com/0x307/pqc-sig/actions/workflows/cargo-deny.yml/badge.svg)](https://github.com/0x307/pqc-sig/actions/workflows/cargo-deny.yml)
+[![crates.io](https://img.shields.io/crates/v/pqc-sig.svg)](https://crates.io/crates/pqc-sig)
+[![docs.rs](https://docs.rs/pqc-sig/badge.svg)](https://docs.rs/pqc-sig)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](#build-requirements)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![FIPS 204](https://img.shields.io/badge/FIPS-204%20ML--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/204/final)
 [![FIPS 205](https://img.shields.io/badge/FIPS-205%20SLH--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/205/final)
 [![FIPS 206](https://img.shields.io/badge/FIPS-206%20FN--DSA-orange.svg)](https://csrc.nist.gov/pubs/fips/206/ipd)
 
 > **Reading the badges:** **CI** is the build-and-test signal — it should be green, and a red
-> one means something is actually broken. **cargo-deny** is the dependency-advisory signal —
-> also expected green. It previously carried an accepted-and-documented exception (the
-> optional `fndsa` feature depended on the now-archived `pqcrypto-falcon`); that dependency
-> was migrated to a pure-Rust, actively-maintained replacement, so there is currently nothing
-> accepted or suppressed — see [`SECURITY.md`](SECURITY.md#known-and-accepted-advisories).
+> one means something is actually broken. **wasm** builds the core crate for
+> `wasm32-unknown-unknown`, runs `wasm-pack build` on the sibling `pqc-sig-wasm` crate, and
+> executes the [`test-wasm.mjs`](test-wasm.mjs) functional suite under Node — see
+> [`.github/workflows/wasm.yml`](.github/workflows/wasm.yml). **cargo-deny** is the
+> dependency-advisory signal — also expected green. It previously carried an
+> accepted-and-documented exception (the optional `fndsa` feature depended on the now-archived
+> `pqcrypto-falcon`); that dependency was migrated to a pure-Rust, actively-maintained
+> replacement, so there is currently nothing accepted or suppressed — see
+> [`SECURITY.md`](SECURITY.md#known-and-accepted-advisories).
+
+**Verification:** 132 known-answer test vectors are published in
+[`tests/vectors/`](tests/vectors/) (ML-DSA-44/65/87 and 7 SLH-DSA parameter sets; keys and
+`sigVer` cases sourced from [NIST ACVP-Server](https://github.com/usnistgov/ACVP-Server),
+signatures self-generated deterministically by this crate over that externally-sourced key
+material — see [`tests/vectors/README.md`](tests/vectors/README.md) for the exact,
+per-vector provenance) and executed on every CI run via
+[`tests/kat_tests.rs`](tests/kat_tests.rs).
 
 ## What runs today vs. what is designed
 
@@ -45,7 +61,20 @@
   > recognize `0x307000`/`0x307001` as FN-DSA. **Revisit trigger:** if/when
   > `multiformats/multicodec` merges a real FN-DSA/Falcon code, `multicodec_code()` migrates to
   > it in a follow-up minor release (tracked in [`src/types.rs`](src/types.rs)'s
-  > `FN_DSA_PRIVATE_USE_BASE` doc comment, which has the full rationale).
+  > `FN_DSA_PRIVATE_USE_BASE` doc comment, which has the full rationale). See
+  > [`docs/MULTICODEC.md`](docs/MULTICODEC.md) for the full code table (registered vs.
+  > provisional status for every algorithm) and the upstream-registration tracking checklist.
+
+### FN-DSA status
+
+FN-DSA (Falcon) support is **optional** — enable it with the `fndsa` feature flag; it is
+never compiled into the default build. [FIPS 206](https://csrc.nist.gov/pubs/fips/206/ipd)
+itself is a NIST **draft** standard, not yet finalized, and FN-DSA's Multikey/DID Document
+multicodec codes (`0x307000`/`0x307001`) are **provisional, private-use** codes this project
+self-assigned — see [`docs/MULTICODEC.md`](docs/MULTICODEC.md) for the full rationale and
+tracking status. **Never use FN-DSA as a default signature algorithm for interop purposes**
+— [`PRIMARY_ALGORITHM`](src/lib.rs) (`ML-DSA-65`) is the only algorithm this crate
+designates as a default, and it uses a registered multicodec code.
 - Standalone WASM/JS bindings for ML-DSA and SLH-DSA live in the sibling
   [`pqc-sig-wasm`](pqc-sig-wasm/) crate (see [WASM Usage](#wasm-usage) below) — this crate
   itself is a pure library (`rlib`-only) and is never the final linked WASM artifact. FN-DSA
@@ -88,11 +117,46 @@ callout above).
 matters — which is the common case, hence ML-DSA-65 remaining this crate's
 [`PRIMARY_ALGORITHM`](src/lib.rs).
 
+## What's new in 0.4.0 — Domain separation & pre-hash
+
+Every algorithm family (ML-DSA, SLH-DSA, and — behind `fndsa` — FN-DSA) now exposes a
+`sign_ctx`/`verify_ctx` trio (FIPS 204/205/206 context strings) and a
+`sign_prehash`/`verify_prehash` trio (`HashML-DSA`/`HashSLH-DSA` for large payloads),
+plus the `hybrid` feature can now bridge an *existing* Ed25519 identity. See
+[`docs/SAGP_NOTES.md`](docs/SAGP_NOTES.md) for the SAGP-specific policy this maps onto.
+
+**Domain-separated signing** — bind a signature to a specific purpose
+([`examples/domain_separation.rs`](examples/domain_separation.rs)):
+
+```rust,ignore
+let sig = keypair.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
+MlDsa65Keypair::verify_ctx(&pk, b"8gentz-agent-v1", msg, &sig)?;
+```
+
+**Pre-hash signing for large payloads** — sign only a digest, never the whole payload
+twice ([`examples/prehash_large_payload.rs`](examples/prehash_large_payload.rs)):
+
+```rust,ignore
+let digest = Sha512::digest(&module_bytes);
+let sig = keypair.sign_prehash_deterministic(b"8gentz-module-v1", PreHash::Sha512, &digest)?;
+MlDsa65Keypair::verify_prehash(&pk, b"8gentz-module-v1", PreHash::Sha512, &digest, &sig)?;
+```
+
+**Hybrid bridge for an existing classical identity** — wrap an already-deployed Ed25519
+key instead of generating a new one
+([`examples/hybrid_bridge.rs`](examples/hybrid_bridge.rs)):
+
+```rust,ignore
+let signer = HybridSigner::from_ed25519_secret(&mut OsRng, &legacy_ed25519_seed)?;
+let sig = signer.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
+```
+
 ## Release
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.3.0** | 2026-09-02 | [crates.io](https://crates.io/crates/pqc-sig/0.3.0) |
+| **v0.4.0** | 2026-09-09 | [crates.io](https://crates.io/crates/pqc-sig/0.4.0) |
+| v0.3.0 | 2026-09-02 | [crates.io](https://crates.io/crates/pqc-sig/0.3.0) |
 | v0.2.1 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.1) |
 | v0.2.0 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.0) |
 | v0.1.0 | 2026-08-01 | [pqc-sig-v0.1.0-wasm.zip](https://github.com/0x307/pqc-sig/releases/download/v0.1.0/pqc-sig-v0.1.0-wasm.zip) |
@@ -200,7 +264,7 @@ list, and not papered over with `continue-on-error`.
 
 ```toml
 [dependencies]
-pqc-sig = "0.3"
+pqc-sig = "0.4"
 ```
 
 ```rust,no_run
@@ -272,7 +336,7 @@ const signature = keypair.sign(message);
 const valid = ml_dsa_65_verify(pubKeyBytes, message, signature);
 console.log("Valid:", valid); // true
 
-console.log("Version:", pqc_sig_version()); // "0.1.0"
+console.log("Version:", pqc_sig_version()); // e.g. "0.4.0"
 ```
 
 ## Hybrid Signatures
@@ -282,7 +346,7 @@ deployments to PQC during migration: `HybridSigner` produces both signatures, an
 verification requires both to pass — an attacker must break both primitives to forge one.
 
 ```toml
-pqc-sig = { version = "0.3", features = ["hybrid"] }
+pqc-sig = { version = "0.4", features = ["hybrid"] }
 ```
 
 ```rust,ignore
@@ -306,12 +370,12 @@ HybridSigner::verify(message, &signature, &pk).unwrap();
 
 The `wit/pqc-sig.wit` file defines the [WIT (WebAssembly Interface Types)](https://component-model.bytecodealliance.org/design/wit.html) interface for this library, enabling use as a WASM Component with any compliant runtime.
 
-**Package:** `x307:pqc-sig@0.1.0`
+**Package:** `x307:pqc-sig@0.4.0`
 
 ### WIT Interface Summary
 
 ```wit
-package x307:pqc-sig@0.1.0;
+package x307:pqc-sig@0.4.0;
 
 interface types { ... }      // sig-algorithm enum, sig-error variant
 interface ml-dsa { ... }     // ML-DSA-44/65/87 keypair resource + sign/verify
@@ -344,14 +408,14 @@ import { mlDsa, slhDsa } from './dist-jco/pqc_sig.js';
 
 ### WIT File Location
 
-The WIT interface is at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) and is also included in the WASM release artifact (`pqc-sig-v0.1.0-wasm.zip`).
+The WIT interface is at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) and is also included in the WASM release artifact (`dist/pqc-sig.wit`, produced by [`build.ps1`](build.ps1); historically shipped as `pqc-sig-v0.1.0-wasm.zip` in the v0.1.0 release — see the [Release](#release) table).
 
 ## `no_std` Support
 
 This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
 
 ```toml
-pqc-sig = { version = "0.3", default-features = false }
+pqc-sig = { version = "0.4", default-features = false }
 ```
 
 ## Features

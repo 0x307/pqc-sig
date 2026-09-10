@@ -24,6 +24,26 @@
 //! const signature = keypair.sign(new TextEncoder().encode("Hello, world!"));
 //! const valid = ml_dsa_65_verify(pubKeyBytes, new TextEncoder().encode("Hello, world!"), signature);
 //! ```
+//!
+//! ## Domain separation and pre-hash (0.4.0)
+//!
+//! Every keypair resource covered by these bindings (ML-DSA ×3, SLH-DSA ×12 — the same
+//! subset the rest of this module covers; FN-DSA and hybrid have no bindings here, same
+//! as before) also exposes `sign_ctx`/`sign_prehash`, with matching free `*_verify_ctx`/
+//! `*_verify_prehash` functions, mirroring `pqc_sig`'s Rust-side `sign_ctx`/
+//! `sign_prehash` API (see the crate-level docs in the `pqc-sig` crate). `sign_prehash`/
+//! `*_verify_prehash` take the pre-hash function as its [`pqc_sig::prehash::PreHash::name`]
+//! string (e.g. `"SHA-512"`, `"SHAKE256"`).
+//!
+//! ```javascript
+//! const kp = new WasmMlDsa65Keypair();
+//! const ctxSig = kp.sign_ctx(new TextEncoder().encode("8gentz-agent-v1"), message);
+//! ml_dsa_65_verify_ctx(kp.public_key_bytes(), new TextEncoder().encode("8gentz-agent-v1"), message, ctxSig);
+//!
+//! const digest = /* caller-computed SHA-512 digest */;
+//! const phSig = kp.sign_prehash(new TextEncoder().encode("8gentz-module-v1"), "SHA-512", digest);
+//! ml_dsa_65_verify_prehash(kp.public_key_bytes(), new TextEncoder().encode("8gentz-module-v1"), "SHA-512", digest, phSig);
+//! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
@@ -31,7 +51,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 #[cfg(not(feature = "std"))]
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec, format};
 
 // ── no_std runtime hooks ─────────────────────────────────────────────────────
 // Unlike pqc-sig (an ordinary rlib library that must never claim these --
@@ -60,6 +80,7 @@ use pqc_sig::fips205::{
     SlhDsaShake192sKeypair, SlhDsaShake192fKeypair,
     SlhDsaShake256sKeypair, SlhDsaShake256fKeypair,
 };
+use pqc_sig::prehash::PreHash;
 use pqc_sig::types::{SigAlgorithm, SigPublicKey, Signature};
 
 // ── RNG for WASM ──────────────────────────────────────────────────────────────
@@ -108,6 +129,30 @@ fn to_js_error(e: pqc_sig::SigError) -> JsValue {
     JsValue::from_str(&e.to_string())
 }
 
+// ── Pre-hash name parsing (0.4.0) ───────────────────────────────────────────
+// Maps the wire-friendly string form used at the WASM/JS boundary to
+// `pqc_sig::prehash::PreHash`. The accepted strings are exactly
+// `PreHash::name()`'s outputs, so `pqc_sig_version()`-style symmetry holds:
+// whatever a Rust caller sees from `.name()`, a JS caller can pass back in.
+
+fn parse_prehash(name: &str) -> Result<PreHash, JsValue> {
+    match name {
+        "SHA-256" => Ok(PreHash::Sha256),
+        "SHA-384" => Ok(PreHash::Sha384),
+        "SHA-512" => Ok(PreHash::Sha512),
+        "SHA3-256" => Ok(PreHash::Sha3_256),
+        "SHA3-384" => Ok(PreHash::Sha3_384),
+        "SHA3-512" => Ok(PreHash::Sha3_512),
+        "SHAKE128" => Ok(PreHash::Shake128),
+        "SHAKE256" => Ok(PreHash::Shake256),
+        other => Err(JsValue::from_str(&format!(
+            "unknown pre-hash name '{}': expected one of SHA-256, SHA-384, SHA-512, \
+             SHA3-256, SHA3-384, SHA3-512, SHAKE128, SHAKE256",
+            other
+        ))),
+    }
+}
+
 // ── ML-DSA-44 ─────────────────────────────────────────────────────────────────
 
 /// ML-DSA-44 keypair for WASM environments (Security Level 2).
@@ -145,6 +190,27 @@ impl WasmMlDsa44Keypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+
+    /// Sign a message with a domain-separation context string (FIPS 204 §5.2).
+    /// `ctx` must be at most 255 bytes, or this rejects with `ContextTooLong`. An
+    /// empty `ctx` is byte-identical to [`Self::sign`].
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+
+    /// Sign a pre-computed digest using the `HashML-DSA` construction (FIPS 204 §5.4).
+    /// `hash` is a [`pqc_sig::prehash::PreHash::name`] string (e.g. `"SHA-512"`).
+    /// Rejects with `PreHashTooWeak`/`InvalidDigestLength` as appropriate.
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an ML-DSA-44 signature.
@@ -159,6 +225,37 @@ pub fn ml_dsa_44_verify(
     let pk = SigPublicKey::new(SigAlgorithm::MlDsa44, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::MlDsa44, signature_bytes.to_vec());
     MlDsa44Keypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an ML-DSA-44 signature made with [`WasmMlDsa44Keypair::sign_ctx`].
+///
+/// Returns `Ok(())` if valid; the rejected `Err` carries the specific reason
+/// (wrong context, `ContextTooLong`, verification failure, ...).
+#[wasm_bindgen]
+pub fn ml_dsa_44_verify_ctx(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    message: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa44, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa44, signature_bytes.to_vec());
+    MlDsa44Keypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an ML-DSA-44 signature made with [`WasmMlDsa44Keypair::sign_prehash`].
+#[wasm_bindgen]
+pub fn ml_dsa_44_verify_prehash(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    hash: &str,
+    digest: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa44, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa44, signature_bytes.to_vec());
+    MlDsa44Keypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── ML-DSA-65 ─────────────────────────────────────────────────────────────────
@@ -212,6 +309,27 @@ impl WasmMlDsa65Keypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         sig.to_json().map_err(to_js_error)
     }
+
+    /// Sign a message with a domain-separation context string (FIPS 204 §5.2).
+    /// `ctx` must be at most 255 bytes, or this rejects with `ContextTooLong`. An
+    /// empty `ctx` is byte-identical to [`Self::sign`].
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+
+    /// Sign a pre-computed digest using the `HashML-DSA` construction (FIPS 204 §5.4).
+    /// `hash` is a [`pqc_sig::prehash::PreHash::name`] string (e.g. `"SHA-512"`).
+    /// Rejects with `PreHashTooWeak`/`InvalidDigestLength` as appropriate.
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an ML-DSA-65 signature.
@@ -226,6 +344,34 @@ pub fn ml_dsa_65_verify(
     let pk = SigPublicKey::new(SigAlgorithm::MlDsa65, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::MlDsa65, signature_bytes.to_vec());
     MlDsa65Keypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an ML-DSA-65 signature made with [`WasmMlDsa65Keypair::sign_ctx`].
+#[wasm_bindgen]
+pub fn ml_dsa_65_verify_ctx(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    message: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa65, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa65, signature_bytes.to_vec());
+    MlDsa65Keypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an ML-DSA-65 signature made with [`WasmMlDsa65Keypair::sign_prehash`].
+#[wasm_bindgen]
+pub fn ml_dsa_65_verify_prehash(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    hash: &str,
+    digest: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa65, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa65, signature_bytes.to_vec());
+    MlDsa65Keypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── ML-DSA-87 ─────────────────────────────────────────────────────────────────
@@ -265,6 +411,27 @@ impl WasmMlDsa87Keypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+
+    /// Sign a message with a domain-separation context string (FIPS 204 §5.2).
+    /// `ctx` must be at most 255 bytes, or this rejects with `ContextTooLong`. An
+    /// empty `ctx` is byte-identical to [`Self::sign`].
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+
+    /// Sign a pre-computed digest using the `HashML-DSA` construction (FIPS 204 §5.4).
+    /// `hash` is a [`pqc_sig::prehash::PreHash::name`] string (e.g. `"SHA-512"`).
+    /// Rejects with `PreHashTooWeak`/`InvalidDigestLength` as appropriate.
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an ML-DSA-87 signature.
@@ -279,6 +446,34 @@ pub fn ml_dsa_87_verify(
     let pk = SigPublicKey::new(SigAlgorithm::MlDsa87, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::MlDsa87, signature_bytes.to_vec());
     MlDsa87Keypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an ML-DSA-87 signature made with [`WasmMlDsa87Keypair::sign_ctx`].
+#[wasm_bindgen]
+pub fn ml_dsa_87_verify_ctx(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    message: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa87, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa87, signature_bytes.to_vec());
+    MlDsa87Keypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an ML-DSA-87 signature made with [`WasmMlDsa87Keypair::sign_prehash`].
+#[wasm_bindgen]
+pub fn ml_dsa_87_verify_prehash(
+    public_key_bytes: &[u8],
+    ctx: &[u8],
+    hash: &str,
+    digest: &[u8],
+    signature_bytes: &[u8],
+) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::MlDsa87, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::MlDsa87, signature_bytes.to_vec());
+    MlDsa87Keypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-128s ─────────────────────────────────────────────────────────
@@ -314,6 +509,23 @@ impl WasmSlhDsaSha2_128sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-128s signature.
@@ -326,6 +538,23 @@ pub fn slh_dsa_sha2_128s_verify(
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128s, signature_bytes.to_vec());
     SlhDsaSha2_128sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-128s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_128s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128s, signature_bytes.to_vec());
+    SlhDsaSha2_128sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-128s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_128s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128s, signature_bytes.to_vec());
+    SlhDsaSha2_128sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-128f ─────────────────────────────────────────────────────────
@@ -352,6 +581,21 @@ impl WasmSlhDsaSha2_128fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-128f signature.
@@ -360,6 +604,23 @@ pub fn slh_dsa_sha2_128f_verify(public_key_bytes: &[u8], message: &[u8], signatu
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128f, signature_bytes.to_vec());
     SlhDsaSha2_128fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-128f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_128f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128f, signature_bytes.to_vec());
+    SlhDsaSha2_128fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-128f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_128f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_128f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_128f, signature_bytes.to_vec());
+    SlhDsaSha2_128fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-128s ────────────────────────────────────────────────────────
@@ -386,6 +647,21 @@ impl WasmSlhDsaShake128sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-128s signature.
@@ -394,6 +670,23 @@ pub fn slh_dsa_shake_128s_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake128s, signature_bytes.to_vec());
     SlhDsaShake128sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-128s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_128s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake128s, signature_bytes.to_vec());
+    SlhDsaShake128sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-128s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_128s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake128s, signature_bytes.to_vec());
+    SlhDsaShake128sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-128f ────────────────────────────────────────────────────────
@@ -420,6 +713,21 @@ impl WasmSlhDsaShake128fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-128f signature.
@@ -428,6 +736,23 @@ pub fn slh_dsa_shake_128f_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake128f, signature_bytes.to_vec());
     SlhDsaShake128fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-128f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_128f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake128f, signature_bytes.to_vec());
+    SlhDsaShake128fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-128f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_128f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake128f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake128f, signature_bytes.to_vec());
+    SlhDsaShake128fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-192s ─────────────────────────────────────────────────────────
@@ -454,6 +779,21 @@ impl WasmSlhDsaSha2_192sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-192s signature.
@@ -462,6 +802,23 @@ pub fn slh_dsa_sha2_192s_verify(public_key_bytes: &[u8], message: &[u8], signatu
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192s, signature_bytes.to_vec());
     SlhDsaSha2_192sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-192s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_192s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192s, signature_bytes.to_vec());
+    SlhDsaSha2_192sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-192s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_192s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192s, signature_bytes.to_vec());
+    SlhDsaSha2_192sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-192f ─────────────────────────────────────────────────────────
@@ -488,6 +845,21 @@ impl WasmSlhDsaSha2_192fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-192f signature.
@@ -496,6 +868,23 @@ pub fn slh_dsa_sha2_192f_verify(public_key_bytes: &[u8], message: &[u8], signatu
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192f, signature_bytes.to_vec());
     SlhDsaSha2_192fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-192f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_192f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192f, signature_bytes.to_vec());
+    SlhDsaSha2_192fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-192f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_192f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_192f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_192f, signature_bytes.to_vec());
+    SlhDsaSha2_192fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-256s ─────────────────────────────────────────────────────────
@@ -522,6 +911,21 @@ impl WasmSlhDsaSha2_256sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-256s signature.
@@ -530,6 +934,23 @@ pub fn slh_dsa_sha2_256s_verify(public_key_bytes: &[u8], message: &[u8], signatu
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256s, signature_bytes.to_vec());
     SlhDsaSha2_256sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-256s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_256s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256s, signature_bytes.to_vec());
+    SlhDsaSha2_256sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-256s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_256s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256s, signature_bytes.to_vec());
+    SlhDsaSha2_256sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHA2-256f ─────────────────────────────────────────────────────────
@@ -556,6 +977,21 @@ impl WasmSlhDsaSha2_256fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHA2-256f signature.
@@ -564,6 +1000,23 @@ pub fn slh_dsa_sha2_256f_verify(public_key_bytes: &[u8], message: &[u8], signatu
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256f, signature_bytes.to_vec());
     SlhDsaSha2_256fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHA2-256f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_256f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256f, signature_bytes.to_vec());
+    SlhDsaSha2_256fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHA2-256f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_sha2_256f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaSha2_256f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaSha2_256f, signature_bytes.to_vec());
+    SlhDsaSha2_256fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-192s ────────────────────────────────────────────────────────
@@ -590,6 +1043,21 @@ impl WasmSlhDsaShake192sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-192s signature.
@@ -598,6 +1066,23 @@ pub fn slh_dsa_shake_192s_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake192s, signature_bytes.to_vec());
     SlhDsaShake192sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-192s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_192s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake192s, signature_bytes.to_vec());
+    SlhDsaShake192sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-192s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_192s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake192s, signature_bytes.to_vec());
+    SlhDsaShake192sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-192f ────────────────────────────────────────────────────────
@@ -624,6 +1109,21 @@ impl WasmSlhDsaShake192fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-192f signature.
@@ -632,6 +1132,23 @@ pub fn slh_dsa_shake_192f_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake192f, signature_bytes.to_vec());
     SlhDsaShake192fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-192f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_192f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake192f, signature_bytes.to_vec());
+    SlhDsaShake192fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-192f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_192f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake192f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake192f, signature_bytes.to_vec());
+    SlhDsaShake192fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-256s ────────────────────────────────────────────────────────
@@ -658,6 +1175,21 @@ impl WasmSlhDsaShake256sKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-256s signature.
@@ -666,6 +1198,23 @@ pub fn slh_dsa_shake_256s_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256s, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake256s, signature_bytes.to_vec());
     SlhDsaShake256sKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-256s signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_256s_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake256s, signature_bytes.to_vec());
+    SlhDsaShake256sKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-256s signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_256s_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256s, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake256s, signature_bytes.to_vec());
+    SlhDsaShake256sKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── SLH-DSA-SHAKE-256f ────────────────────────────────────────────────────────
@@ -692,6 +1241,21 @@ impl WasmSlhDsaShake256fKeypair {
         let sig = self.inner.sign(&mut rng, message).map_err(to_js_error)?;
         Ok(sig.bytes)
     }
+    /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+    #[wasm_bindgen]
+    pub fn sign_ctx(&self, ctx: &[u8], message: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let sig = self.inner.sign_ctx(&mut rng, ctx, message).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
+    /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205 §10.2.2).
+    #[wasm_bindgen]
+    pub fn sign_prehash(&self, ctx: &[u8], hash: &str, digest: &[u8]) -> Result<Vec<u8>, JsValue> {
+        let mut rng = wasm_rng();
+        let hash = parse_prehash(hash)?;
+        let sig = self.inner.sign_prehash(&mut rng, ctx, hash, digest).map_err(to_js_error)?;
+        Ok(sig.bytes)
+    }
 }
 
 /// Verify an SLH-DSA-SHAKE-256f signature.
@@ -700,6 +1264,23 @@ pub fn slh_dsa_shake_256f_verify(public_key_bytes: &[u8], message: &[u8], signat
     let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256f, public_key_bytes.to_vec());
     let sig = Signature::new(SigAlgorithm::SlhDsaShake256f, signature_bytes.to_vec());
     SlhDsaShake256fKeypair::verify(&pk, message, &sig).is_ok()
+}
+
+/// Verify an SLH-DSA-SHAKE-256f signature made with `sign_ctx`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_256f_verify_ctx(public_key_bytes: &[u8], ctx: &[u8], message: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake256f, signature_bytes.to_vec());
+    SlhDsaShake256fKeypair::verify_ctx(&pk, ctx, message, &sig).map_err(to_js_error)
+}
+
+/// Verify an SLH-DSA-SHAKE-256f signature made with `sign_prehash`.
+#[wasm_bindgen]
+pub fn slh_dsa_shake_256f_verify_prehash(public_key_bytes: &[u8], ctx: &[u8], hash: &str, digest: &[u8], signature_bytes: &[u8]) -> Result<(), JsValue> {
+    let hash = parse_prehash(hash)?;
+    let pk = SigPublicKey::new(SigAlgorithm::SlhDsaShake256f, public_key_bytes.to_vec());
+    let sig = Signature::new(SigAlgorithm::SlhDsaShake256f, signature_bytes.to_vec());
+    SlhDsaShake256fKeypair::verify_prehash(&pk, ctx, hash, digest, &sig).map_err(to_js_error)
 }
 
 // ── Utility Functions ─────────────────────────────────────────────────────────

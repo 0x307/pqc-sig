@@ -1,0 +1,142 @@
+name: wasm
+
+# Closes the wasm32/wasm-pack half of gap S-5 ("no wasm32 job, no wasm-pack
+# job, no clippy/fmt/doc job" per docs/GAP_VALIDATION.md §7). ci.yml already
+# has a `wasm-cdylib-build` job that proves pqc-sig-wasm builds for
+# wasm32-unknown-unknown (CRA-3); this workflow is the *user-facing* WASM
+# signal: it additionally runs wasm-pack itself and executes the real
+# functional test suite (test-wasm.mjs, 22+ assertions) against the built
+# artifact under Node, and gives that signal its own badge (a shields.io
+# "workflow status" badge can't scope to a single job inside ci.yml, so — like
+# cargo-deny.yml being split from ci.yml — this lives in its own file).
+#
+# Deliberately no `cargo fmt --check` job: this codebase is intentionally
+# hand-formatted and is not rustfmt-clean (see CONTRIBUTING.md / STABILITY.md
+# conventions) — adding one would fail on unrelated pre-existing formatting,
+# not on anything this PR/commit changed.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wasm32-core:
+    name: pqc-sig core crate builds for wasm32-unknown-unknown (all feature combos)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone)
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain (wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Toolchain versions
+        run: |
+          rustc --version
+          cargo --version
+
+      # Mirrors release-notes.md's documented wasm32 feature combinations for
+      # the root pqc-sig library crate (not the pqc-sig-wasm cdylib artifact,
+      # which ci.yml's wasm-cdylib-build job already covers).
+      - name: cargo build --target wasm32-unknown-unknown --no-default-features
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --verbose
+
+      - name: cargo build --target wasm32-unknown-unknown --no-default-features --features fndsa,hybrid
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --features fndsa,hybrid --verbose
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  wasm-pack:
+    name: wasm-pack build + test-wasm.mjs functional suite (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone)
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain (wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Install Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Mirrors build-wasm.ps1 exactly: --target web, --out-dir ../dist
+      # (relative to pqc-sig-wasm/, i.e. repo-root/dist), --release,
+      # --no-default-features -- the layout test-wasm.mjs expects
+      # (it reads ./dist/pqc_sig_bg.wasm and ./dist/pqc_sig.js from the repo root).
+      - name: wasm-pack build --target web --out-dir ../dist --release -- --no-default-features
+        working-directory: pqc-sig-wasm
+        run: wasm-pack build --target web --out-dir ../dist --release -- --no-default-features
+
+      - name: node test-wasm.mjs
+        run: node test-wasm.mjs
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  quality:
+    name: clippy (-D warnings) + cargo doc (-D warnings)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone)
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain (clippy component)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Toolchain versions
+        run: |
+          rustc --version
+          cargo --version
+          cargo clippy --version
+
+      - name: cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      # docs.rs builds with all-features = true (Cargo.toml
+      # [package.metadata.docs.rs]); -D warnings here catches broken intra-doc
+      # links / missing docs before they'd surface on docs.rs itself.
+      - name: cargo doc --all-features --no-deps (RUSTDOCFLAGS=-D warnings)
+        run: cargo doc --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"

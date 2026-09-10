@@ -48,11 +48,25 @@ $WitDest = Join-Path $ScriptDir "dist\pqc-sig.wit"
 Copy-Item -Path $WitSrc -Destination $WitDest -Force
 
 # ── Step 3: Write dist/package.json ──────────────────────────────────────────
+# Version is read from the workspace Cargo.toml's [package].version rather than
+# hardcoded here, so this script doesn't silently drift stale after a crate version
+# bump (see docs/GAP_VALIDATION.md §7/§S-5 -- this hardcoded string was previously
+# found stale at "0.1.0" while the crate had already moved well past it).
+Write-Host "[build] Reading version from Cargo.toml..." -ForegroundColor Cyan
+$CargoTomlPath = Join-Path $ScriptDir "Cargo.toml"
+$VersionMatch = Select-String -Path $CargoTomlPath -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+if (-not $VersionMatch) {
+    Write-Error "[build] Could not find a version = `"...`" line in $CargoTomlPath"
+    exit 1
+}
+$PqcSigVersion = $VersionMatch.Matches[0].Groups[1].Value
+Write-Host "[build] Detected pqc-sig version: $PqcSigVersion" -ForegroundColor Cyan
+
 Write-Host "[build] Writing dist/package.json..." -ForegroundColor Cyan
-$PackageJson = @'
+$PackageJson = @"
 {
   "name": "pqc-sig",
-  "version": "0.3.0",
+  "version": "$PqcSigVersion",
   "description": "Post-quantum digital signatures: ML-DSA (FIPS 204), SLH-DSA (FIPS 205) — standalone WASM",
   "type": "module",
   "main": "./pqc_sig.js",
@@ -86,7 +100,7 @@ $PackageJson = @'
     }
   }
 }
-'@
+"@
 $PackageJsonPath = Join-Path $ScriptDir "dist\package.json"
 Set-Content -Path $PackageJsonPath -Value $PackageJson -Encoding UTF8
 
