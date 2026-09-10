@@ -1,7 +1,7 @@
 // pqc-sig/wit/pqc-sig.wit
 //
 // WIT interface for the pqc-sig WASM Component Model component.
-// Package: x307:pqc-sig@0.1.0
+// Package: x307:pqc-sig@0.4.0
 //
 // This interface enables any WASM runtime (wasmtime, wasmer, browser via jco)
 // to consume post-quantum signature operations as a component, similar to a .dll or .jar.
@@ -9,7 +9,7 @@
 // Build with:
 //   wasm-pack build --target web --no-default-features --features wasm
 
-package x307:pqc-sig@0.1.0;
+package x307:pqc-sig@0.4.0;
 
 /// Core signature types shared across all algorithm interfaces.
 interface types {
@@ -45,10 +45,39 @@ interface types {
         slh-dsa-shake-256s,
         /// SLH-DSA-SHAKE-256f (NIST FIPS 205, Security Level 5, fast signing)
         slh-dsa-shake-256f,
-        /// FN-DSA-512 / Falcon-512 (NIST FIPS 206, Security Level 1) — NOT WASM-compatible
+        /// FN-DSA-512 / Falcon-512 (NIST FIPS 206 draft, Security Level 1) — pure Rust,
+        /// WASM-capable; requires the optional `fndsa` feature. Its Multikey/DID
+        /// Document multicodec code is a provisional, `0x307`-reserved private-use
+        /// code (no upstream multiformats/multicodec registration exists yet) — see
+        /// `docs/MULTICODEC.md` in the source repository. Not bound to a resource or
+        /// function in this WIT world yet; tracked for a future minor version.
         fn-dsa-512,
-        /// FN-DSA-1024 / Falcon-1024 (NIST FIPS 206, Security Level 5) — NOT WASM-compatible
+        /// FN-DSA-1024 / Falcon-1024 (NIST FIPS 206 draft, Security Level 5) — pure
+        /// Rust, WASM-capable; requires the optional `fndsa` feature. Same provisional
+        /// multicodec caveat as `fn-dsa-512` above.
         fn-dsa-1024,
+    }
+
+    /// Approved pre-hash functions for `HashML-DSA`/`HashSLH-DSA` (FIPS 204 §5.4.1 /
+    /// FIPS 205 §10.2.2) and FN-DSA's native pre-hashed mode. The caller computes the
+    /// digest; this interface never hashes on the caller's behalf.
+    enum pre-hash {
+        /// SHA-256 (128-bit collision strength, 32-byte digest).
+        sha256,
+        /// SHA-384 (192-bit collision strength, 48-byte digest).
+        sha384,
+        /// SHA-512 (256-bit collision strength, 64-byte digest).
+        sha512,
+        /// SHA3-256 (128-bit collision strength, 32-byte digest).
+        sha3-256,
+        /// SHA3-384 (192-bit collision strength, 48-byte digest).
+        sha3-384,
+        /// SHA3-512 (256-bit collision strength, 64-byte digest).
+        sha3-512,
+        /// SHAKE128 with a 256-bit (32-byte) output (128-bit collision strength).
+        shake128,
+        /// SHAKE256 with a 512-bit (64-byte) output (256-bit collision strength).
+        shake256,
     }
 
     /// A signature error.
@@ -67,6 +96,16 @@ interface types {
         invalid-signature(string),
         /// Algorithm not available (feature not enabled).
         algorithm-not-available(string),
+        /// Domain-separation context string exceeds the FIPS 204/205/206 255-byte
+        /// maximum. Returned by `sign-ctx`/`verify-ctx`/`sign-prehash`/`verify-prehash`
+        /// before the call would otherwise hit an opaque upstream error.
+        context-too-long(u32),
+        /// Pre-hash digest length does not match the expected output size of the named
+        /// hash function (FIPS 204 §5.4.1 / FIPS 205 §10.2.2).
+        invalid-digest-length(string),
+        /// Pre-hash collision strength is weaker than the signature algorithm's
+        /// required security strength (e.g. `sha256` rejected for `ml-dsa-65`).
+        pre-hash-too-weak(string),
         /// Generic internal error.
         internal(string),
     }
@@ -76,7 +115,7 @@ interface types {
 ///
 /// All three parameter sets are available without any feature flags.
 interface ml-dsa {
-    use types.{sig-error};
+    use types.{sig-error, pre-hash};
 
     /// ML-DSA parameter set selection.
     enum parameter-set {
@@ -112,6 +151,21 @@ interface ml-dsa {
         /// - ML-DSA-65:  3309 bytes
         /// - ML-DSA-87:  4627 bytes
         sign: func(message: list<u8>) -> result<list<u8>, sig-error>;
+
+        /// Sign a message with a domain-separation context string (FIPS 204 §5.2).
+        /// `ctx` binds the signature to a specific application/protocol so a
+        /// signature made under one context cannot be replayed as valid under
+        /// another. `ctx` must be at most 255 bytes, or this returns
+        /// `context-too-long`. An empty `ctx` is byte-identical to `sign`.
+        sign-ctx: func(ctx: list<u8>, message: list<u8>) -> result<list<u8>, sig-error>;
+
+        /// Sign a pre-computed digest using the `HashML-DSA` construction (FIPS 204
+        /// §5.4, Algorithm 4). `digest` must have been produced by hashing the actual
+        /// message with `hash` — this interface never hashes on the caller's behalf.
+        /// `hash`'s collision strength must meet the parameter set's security
+        /// strength, or this returns `pre-hash-too-weak`; a mismatched `digest`
+        /// length returns `invalid-digest-length`.
+        sign-prehash: func(ctx: list<u8>, hash: pre-hash, digest: list<u8>) -> result<list<u8>, sig-error>;
     }
 
     /// Verify an ML-DSA signature.
@@ -123,6 +177,27 @@ interface ml-dsa {
         message: list<u8>,
         signature: list<u8>,
     ) -> result<_, sig-error>;
+
+    /// Verify a signature made with `ml-dsa-keypair.sign-ctx`. `ctx` must match
+    /// exactly what was used to sign.
+    verify-ctx: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        ctx: list<u8>,
+        message: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
+
+    /// Verify a signature made with `ml-dsa-keypair.sign-prehash`. A pre-hash
+    /// signature does not verify via `verify`/`verify-ctx` and vice versa.
+    verify-prehash: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        ctx: list<u8>,
+        hash: pre-hash,
+        digest: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
 }
 
 /// SLH-DSA (NIST FIPS 205) interface — pure Rust, WASM-native.
@@ -130,7 +205,7 @@ interface ml-dsa {
 /// All 12 parameter sets are available without any feature flags.
 /// Note: SLH-DSA signatures are large (7856–49856 bytes depending on parameter set).
 interface slh-dsa {
-    use types.{sig-error};
+    use types.{sig-error, pre-hash};
 
     /// SLH-DSA parameter set selection.
     enum parameter-set {
@@ -176,6 +251,16 @@ interface slh-dsa {
 
         /// Sign a message deterministically (no randomness).
         sign-deterministic: func(message: list<u8>) -> result<list<u8>, sig-error>;
+
+        /// Sign a message with a domain-separation context string (FIPS 205 §10.2).
+        /// `ctx` must be at most 255 bytes, or this returns `context-too-long`. An
+        /// empty `ctx` is byte-identical to `sign`.
+        sign-ctx: func(ctx: list<u8>, message: list<u8>) -> result<list<u8>, sig-error>;
+
+        /// Sign a pre-computed digest using the `HashSLH-DSA` construction (FIPS 205
+        /// §10.2.2, Algorithm 23). See `ml-dsa.sign-prehash` for the validation rules
+        /// (`hash` strength, `digest` length) — identical here.
+        sign-prehash: func(ctx: list<u8>, hash: pre-hash, digest: list<u8>) -> result<list<u8>, sig-error>;
     }
 
     /// Verify an SLH-DSA signature.
@@ -185,13 +270,34 @@ interface slh-dsa {
         message: list<u8>,
         signature: list<u8>,
     ) -> result<_, sig-error>;
+
+    /// Verify a signature made with `slh-dsa-keypair.sign-ctx`. `ctx` must match
+    /// exactly what was used to sign.
+    verify-ctx: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        ctx: list<u8>,
+        message: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
+
+    /// Verify a signature made with `slh-dsa-keypair.sign-prehash`. A pre-hash
+    /// signature does not verify via `verify`/`verify-ctx` and vice versa.
+    verify-prehash: func(
+        params: parameter-set,
+        public-key: list<u8>,
+        ctx: list<u8>,
+        hash: pre-hash,
+        digest: list<u8>,
+        signature: list<u8>,
+    ) -> result<_, sig-error>;
 }
 
 /// Utility functions exposed at the component level.
 interface utils {
     use types.{sig-algorithm};
 
-    /// Returns the crate version string (e.g. "0.1.0").
+    /// Returns the crate version string (e.g. "0.4.0").
     version: func() -> string;
 
     /// Returns the primary algorithm identifier (e.g. "ML-DSA-65").

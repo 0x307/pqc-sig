@@ -7,6 +7,122 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [0.4.0] - 2026-09-09
+
+Per `STABILITY.md` §2/§4, this is a **purely additive, non-breaking** release — every
+gap-closing change below is a new opt-in method, type, or artifact; no existing signature,
+wire format, or default behavior changes. Minor version bump (`0.3.1` → `0.4.0`), no
+"Migration from 0.3.x" section required.
+
+Five stakeholder-identified gaps (S-1..S-5, see `docs/GAP_VALIDATION.md`) are closed in this
+release.
+
+### Added
+
+- **Domain-separated signing (S-1)** — new [`src/ctx.rs`](src/ctx.rs) with
+  `pub const MAX_CONTEXT_LEN: usize = 255` (re-exported at the crate root) and
+  `pub(crate) fn check_ctx`; new `SigError::ContextTooLong { len: usize }` variant. Every
+  `MlDsa44/65/87Keypair` and all 12 `SlhDsa*Keypair` types gain
+  `sign_ctx(rng, ctx, msg)`, `sign_ctx_deterministic(ctx, msg)`, and
+  `verify_ctx(pk, ctx, msg, sig)`, implemented via `ml-dsa`'s native
+  `sign_deterministic(msg, ctx)`/`verify_with_context` and `slh-dsa`'s
+  `try_sign_with_context`/`try_verify_with_context`. `FnDsa512/1024Keypair` gain `sign_ctx`/
+  `verify_ctx` via `fn_dsa::DomainContext`. Calling with an empty `ctx` is byte-identical to
+  the existing `sign`/`verify`. New example: [`examples/domain_separation.rs`](examples/domain_separation.rs).
+  New crate-doc "Domain separation" section in [`src/lib.rs`](src/lib.rs).
+- **Pre-hash signing / HashML-DSA + HashSLH-DSA (S-4)** — new
+  [`src/prehash.rs`](src/prehash.rs): `#[non_exhaustive] pub enum PreHash { Sha256, Sha384,
+  Sha512, Sha3_256, Sha3_384, Sha3_512, Shake128, Shake256 }` with `oid_der()`,
+  `digest_len()`, `collision_strength_bits()`, `name()`, re-exported as `pqc_sig::PreHash`;
+  new `SigError::InvalidDigestLength { hash, expected, got }` and
+  `SigError::PreHashTooWeak { hash, strength, algorithm, required }` variants. ML-DSA (×3) and
+  SLH-DSA (×12) gain `pub const SECURITY_STRENGTH_BITS: u32`, `sign_prehash(rng, ctx, hash,
+  digest)`, `sign_prehash_deterministic(ctx, hash, digest)`, `verify_prehash(pk, ctx, hash,
+  digest, sig)`, implemented per FIPS 204 §5.4 Alg 4/5 and FIPS 205 §10.2.2 Alg 23/25
+  (`M' = 0x01 ‖ len(ctx) ‖ ctx ‖ OID ‖ digest`) via upstream `sign_internal`/`verify_internal`
+  (`ml-dsa` 0.1.1) and `slh_sign_internal`/`slh_verify_internal` (`slh-dsa` 0.2.0-rc.5).
+  Collision strength is enforced to be ≥ the parameter set's security strength (e.g.
+  SHA-256 is rejected for ML-DSA-65/87). FN-DSA (×2) gain `sign_prehash`, `verify_prehash`,
+  `SECURITY_STRENGTH_BITS` via native `HASH_ID_*`. New example:
+  [`examples/prehash_large_payload.rs`](examples/prehash_large_payload.rs). New dev-deps
+  `sha2 = "0.10"`, `sha3 = "0.10"`. New crate-doc "Pre-hash signing (large payloads)" section.
+- **Hybrid Ed25519+ML-DSA-65 bridge additions (S-2, `hybrid` feature, still off by default)** —
+  `HybridSigner::from_ed25519_secret(rng, &[u8; 32])`,
+  `from_secret_key_bytes(&[u8; 32], ml_dsa_65_seed: &[u8])`, `secret_key() ->
+  HybridSecretKey { ed25519_seed: [u8; 32], ml_dsa_65: Vec<u8> }` (`Zeroize`/
+  `ZeroizeOnDrop`, redacted `Debug`), `sign_ctx(rng, ctx, msg)`, `verify_ctx(pk, ctx, msg,
+  sig)`, and `pub const HYBRID_CTX_FRAME_DOMAIN: u8 = 0x00`. The ML-DSA half uses native FIPS
+  204 `ctx`; the Ed25519 half signs a crate-defined `0x00 ‖ u8(len ctx) ‖ ctx ‖ msg` frame (not
+  a standard convention). New example:
+  [`examples/hybrid_bridge.rs`](examples/hybrid_bridge.rs) (`required-features = ["hybrid"]`).
+  New [`docs/SAGP_NOTES.md`](docs/SAGP_NOTES.md) (recommended `PRIMARY_ALGORITHM` = ML-DSA-65,
+  ctx table, Wave-1 accept-hybrid guidance, pre-hash, FN-DSA non-default posture).
+- **FN-DSA multicodec status documentation (S-3)** — new
+  [`docs/MULTICODEC.md`](docs/MULTICODEC.md): table of all 17 codes (ML-DSA `0x1210–0x1212`,
+  SLH-DSA `0x1220–0x122b` registered draft-status upstream; FN-DSA `0x307000`/`0x307001`
+  provisional private-use, `FN_DSA_PRIVATE_USE_BASE`, `is_private_use_multicodec()`), plus a
+  tracking checklist for upstream registration. README "FN-DSA status" note. **No multicodec
+  code values changed.**
+- **External proof / published KAT vectors (S-5)** — new
+  [`tests/vectors/`](tests/vectors/): 10 JSON files, **132 known-answer test vectors**
+  (ML-DSA-44/65/87: 30 each — 2 keygen, 8 pure, 6 ctx, 6 prehash, 3 negative, 5 real NIST ACVP
+  `sigVer`; SLH-DSA sha2-128s/128f/192s/192f/256s/256f + shake-128s: 6 each). Provenance: NIST
+  ACVP-Server `keyGen` (seed→pk cross-checked; SLH-DSA keys used verbatim) + ACVP `sigVer` for
+  ML-DSA; deterministic self-generated signatures for pure/ctx/prehash; curated raw evidence
+  in [`tests/vectors/acvp_source/`](tests/vectors/acvp_source/); full provenance writeup in
+  [`tests/vectors/README.md`](tests/vectors/README.md); byte-reproducible generator
+  [`examples/gen_kat_vectors.rs`](examples/gen_kat_vectors.rs); consumer
+  [`tests/kat_tests.rs`](tests/kat_tests.rs) (11 tests, `include_str!`, ships in the packaged
+  crate). New [`.github/workflows/wasm.yml`](.github/workflows/wasm.yml): `wasm32-core`,
+  `wasm-pack` (+ `node test-wasm.mjs`), `quality` (clippy `-D warnings`, doc `-D warnings`)
+  jobs. New README badges (WASM workflow, crates.io, docs.rs, MSRV 1.85) and a "Verification"
+  sentence.
+
+### Changed
+
+- [`wit/pqc-sig.wit`](wit/pqc-sig.wit) package bumped to `x307:pqc-sig@0.4.0`; stale
+  "FN-DSA NOT WASM-compatible" comments corrected; added the `pre-hash` enum, `sign-ctx`/
+  `verify-ctx`, `sign-prehash`/`verify-prehash` functions, and `sig-error` variants
+  `context-too-long`/`invalid-digest-length`/`pre-hash-too-weak`. Validated with
+  `wasm-tools component wit`.
+- [`pqc-sig-wasm/src/lib.rs`](pqc-sig-wasm/src/lib.rs): `sign_ctx`/`sign_prehash` added on all
+  15 bound keypairs, plus `{alg}_verify_ctx`/`{alg}_verify_prehash` free functions (60 new
+  bindings total) and `parse_prehash(&str)` (dispatches by `PreHash::name()`).
+  `verify_ctx`/`verify_prehash` now return `Result<(), JsValue>` instead of `bool`, so
+  verification errors are observable from JS rather than silently collapsed to `false`.
+  [`test-wasm.mjs`](test-wasm.mjs) gains 4 new tests (22 total).
+- [`build.ps1`](build.ps1) now reads the shipped package version from `Cargo.toml` instead of
+  a hardcoded string, so `dist/package.json` can no longer drift stale after a version bump.
+  Stale `0.1.0` strings in `README.md` fixed.
+
+### Security notes
+
+- Native FIPS domain-separation context (`ctx`) is capped at `MAX_CONTEXT_LEN = 255` bytes and
+  enforced by `check_ctx` on every `sign_ctx`/`verify_ctx` call, per FIPS 204/205.
+- Pre-hash signing enforces the chosen hash's collision strength is ≥ the target parameter
+  set's security strength (`SigError::PreHashTooWeak`) — callers cannot silently downgrade
+  security by pre-hashing with a weak digest.
+- The hybrid bridge's Ed25519-half context framing (`HYBRID_CTX_FRAME_DOMAIN` = `0x00 ‖
+  u8(len ctx) ‖ ctx ‖ msg`) is a **crate-defined convention, not a standardized one** — it is
+  not compatible with other implementations' domain separation of classical Ed25519.
+  `sign_ctx(&[], m)` is intentionally **not** byte-identical to the legacy `sign(m)` wire
+  format for the hybrid signer (unlike the native ML-DSA/SLH-DSA `sign_ctx`, which is
+  empty-context-compatible).
+- ML-DSA `sign`/`sign_ctx`/`sign_prehash` remain **deterministic** in this release — the
+  caller-provided `rng` is accepted but currently ignored (hedged/randomized ML-DSA signing
+  needs a `rand_core` 0.6→0.10 adapter; pre-existing, tracked as `TODO(hedging)`). This is
+  unchanged behavior, not a regression introduced by this release.
+
+### Known limitations
+
+- SLH-DSA cannot stream a message by construction (the whole message must be buffered before
+  hashing) — pre-hash signing (S-4) is the recommended answer for large payloads.
+- SLH-DSA KATs have ACVP-sourced *keys* but self-generated *signatures* — the upstream ACVP
+  `sigGen` files (30–38 MB) were not curated in this pass; see
+  [`tests/vectors/README.md`](tests/vectors/README.md#future-improvement-not-done-in-this-pass-recorded-for-the-next-one).
+- `pqc-sig-wasm` does not bind FN-DSA or `hybrid` (unchanged from 0.3.x) — WASM exposes ML-DSA
+  and SLH-DSA only.
+
 ## [0.3.0] - 2026-09-02
 
 Per `STABILITY.md` §2/§4, this is a breaking release — two independent pieces of work land

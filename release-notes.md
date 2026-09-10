@@ -1,5 +1,118 @@
 # pqc-sig Release Notes
 
+## v0.4.0 (2026-09-09)
+
+Closes five stakeholder-identified adoption gaps (S-1..S-5) blocking SAGP/8gentz-fabric
+integration. **Purely additive — no breaking changes, no migration required.**
+
+### Highlights
+
+**S-1: Domain-separated signing.** Every ML-DSA and SLH-DSA keypair (all 15 native FIPS
+algorithms) now exposes `sign_ctx`/`sign_ctx_deterministic`/`verify_ctx`, using the FIPS
+204/205 `ctx` byte-string parameter natively rather than the hard-coded empty context this
+crate previously baked in. This is what lets an agent cryptographically bind a
+signature to a specific protocol/relationship (e.g. `"8gentz-agent-v1"` vs.
+`"8gentz-fabric-v1"`) so a signature produced for one context can't be replayed as valid in
+another — a prerequisite for any multi-tenant or multi-protocol SAGP deployment. FN-DSA gets
+the same capability via `fn_dsa::DomainContext`. See
+[`examples/domain_separation.rs`](examples/domain_separation.rs).
+
+**S-2: Hybrid bridge for existing classical identities.** `HybridSigner` can now be
+constructed from an *already-deployed* Ed25519 secret (`from_ed25519_secret`) or restored
+from persisted key material (`from_secret_key_bytes`/`secret_key()`), instead of only
+`generate()`-ing a fresh keypair. This removes the practical migration blocker for a fleet
+that already has classical identities: agents can add a post-quantum ML-DSA-65 signature
+alongside their existing Ed25519 key without re-provisioning identity. `sign_ctx`/
+`verify_ctx` bring domain separation to the hybrid combiner too. See
+[`examples/hybrid_bridge.rs`](examples/hybrid_bridge.rs) and
+[`docs/SAGP_NOTES.md`](docs/SAGP_NOTES.md) for the recommended `PRIMARY_ALGORITHM` (ML-DSA-65)
+and Wave-1 accept-hybrid rollout guidance. `hybrid` remains an opt-in feature, off by default.
+
+**S-3: FN-DSA multicodec status, documented.** No code changed here — what changed is
+clarity. [`docs/MULTICODEC.md`](docs/MULTICODEC.md) lays out, for all 17 algorithms, exactly
+which multicodec codes are upstream-registered (ML-DSA, SLH-DSA) versus this project's own
+provisional private-use reservation (FN-DSA `0x307000`/`0x307001`), with a tracking checklist
+for when/if multiformats/multicodec registers a real code. Stakeholders integrating FN-DSA
+Multikeys into cross-org tooling now have a single authoritative reference for interop scope
+instead of having to reverse-engineer it from source comments.
+
+**S-4: Pre-hash signing for large payloads (HashML-DSA / HashSLH-DSA).** `sign_prehash`/
+`sign_prehash_deterministic`/`verify_prehash`, spec-conformant with FIPS 204 §5.4 Alg 4/5 and
+FIPS 205 §10.2.2 Alg 23/25, let a caller hash a large artifact (a container image, a model
+checkpoint, an 8gentz module bundle) themselves and sign only the digest — this crate never
+buffers the full payload for signing purposes. Digest strength is enforced against the target
+algorithm's security level (`SigError::PreHashTooWeak`), so e.g. SHA-256 is rejected for
+ML-DSA-65/87 rather than silently under-securing the signature. See
+[`examples/prehash_large_payload.rs`](examples/prehash_large_payload.rs).
+
+**S-5: External, independently-checkable proof.** 132 known-answer test vectors, with key
+material sourced from NIST's own ACVP-Server (not self-generated), are now published under
+[`tests/vectors/`](tests/vectors/), executed on every `cargo test`, and shipped inside the
+packaged crate so downstream consumers can verify this implementation offline without
+depending on any network service. A new WASM CI workflow
+([`.github/workflows/wasm.yml`](.github/workflows/wasm.yml)) additionally proves the compiled
+WASM artifact behaves identically to the native build, on every push.
+
+### Upgrading from 0.3.x
+
+No code changes are required. Every addition in this release is either:
+
+- a new opt-in method on an existing type (`sign_ctx`, `sign_prehash`, and friends) — existing
+  calls to `sign`/`verify` are untouched and byte-identical to before;
+- a new opt-in constructor on `HybridSigner` (`from_ed25519_secret`, `from_secret_key_bytes`)
+  — `HybridSigner::generate()` still works exactly as before, and `hybrid` is still not a
+  default feature (`features = ["hybrid"]` is still required to use any of it); or
+- documentation/tooling only (`docs/MULTICODEC.md`, `docs/SAGP_NOTES.md`, KAT vectors, CI).
+
+If you build `pqc-sig-wasm` yourself: it is now version `0.4.0` and exposes 60 new JS
+bindings (`sign_ctx`/`sign_prehash` on all 15 bound keypairs, plus free-function
+`{alg}_verify_ctx`/`{alg}_verify_prehash`). `verify_ctx`/`verify_prehash` return
+`Result<(), JsValue>` rather than `bool` — if you call these *new* functions from JS, check
+for a thrown/rejected error rather than a falsy return; the pre-existing `{alg}_verify`
+functions are unchanged. If you consume `wit/pqc-sig.wit`, the package name is now
+`x307:pqc-sig@0.4.0` (was `@0.1.0`, stale).
+
+### Known limitations
+
+- ML-DSA `sign(rng, ..)`/`sign_ctx`/`sign_prehash` remain **deterministic**: the
+  caller-provided `rng` is accepted but currently ignored. Hedged/randomized ML-DSA signing
+  needs a `rand_core` 0.6→0.10 adapter for the upstream `ml-dsa` crate — this is a
+  pre-existing limitation (`TODO(hedging)`), not new in this release.
+- SLH-DSA cannot stream a message by construction — the full message must be buffered before
+  signing/verifying. Pre-hash signing (S-4) is the recommended mitigation for large payloads.
+- SLH-DSA's published KATs have ACVP-sourced *keys* but self-generated *signatures* — the
+  upstream ACVP `SLH-DSA-sigGen`/`sigVer` files (30–38 MB) were not curated in this pass. See
+  [`tests/vectors/README.md`](tests/vectors/README.md) for the exact per-vector provenance and
+  what's planned next.
+- `pqc-sig-wasm` still does not bind FN-DSA or `hybrid` (unchanged from 0.3.x) — only ML-DSA
+  and SLH-DSA are exposed to WASM/JS.
+- The hybrid bridge's Ed25519-half context framing (`0x00 ‖ len(ctx) ‖ ctx ‖ msg`) is a
+  crate-defined convention, not a cross-implementation standard.
+
+### Test Coverage
+
+- **201 tests passing with `--all-features`, 0 failed, 4 ignored** (up from the `0.3.1`
+  baseline of 106) — unit tests: 49 (including 9 new pre-hash tests, 10 new hybrid tests, 2
+  new ctx tests); `ml_dsa` integration: 40; `slh_dsa` integration: 46; `fn_dsa` integration:
+  27; `kat_tests`: 11; `multibase_tests`: 13; `ssi_interop_test`: 7; doctests: 8 passed / 4
+  ignored.
+- **132 published KAT vectors** across 10 files under [`tests/vectors/`](tests/vectors/),
+  executed by `kat_tests`, byte-reproducible via
+  [`examples/gen_kat_vectors.rs`](examples/gen_kat_vectors.rs).
+- **22/22 WASM functional tests** via `node test-wasm.mjs` against the `wasm-pack`-built
+  `pqc-sig-wasm` artifact.
+
+### Files of interest
+
+- [`src/ctx.rs`](src/ctx.rs), [`src/prehash.rs`](src/prehash.rs), [`src/hybrid.rs`](src/hybrid.rs)
+- [`examples/domain_separation.rs`](examples/domain_separation.rs),
+  [`examples/prehash_large_payload.rs`](examples/prehash_large_payload.rs),
+  [`examples/hybrid_bridge.rs`](examples/hybrid_bridge.rs),
+  [`examples/gen_kat_vectors.rs`](examples/gen_kat_vectors.rs)
+- [`docs/SAGP_NOTES.md`](docs/SAGP_NOTES.md), [`docs/MULTICODEC.md`](docs/MULTICODEC.md)
+- [`tests/vectors/README.md`](tests/vectors/README.md), [`tests/kat_tests.rs`](tests/kat_tests.rs)
+- [`wit/pqc-sig.wit`](wit/pqc-sig.wit), [`.github/workflows/wasm.yml`](.github/workflows/wasm.yml)
+
 ## v0.2.1 (2026-09-01)
 
 Docs-only fix: README.md and `src/lib.rs`'s doc-comment examples still pinned `pqc-sig =

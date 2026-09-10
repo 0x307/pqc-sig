@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "pqc-sig"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "base64ct",
  "bs58",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "pqc-sig-wasm"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64ct",
  "dlmalloc",
