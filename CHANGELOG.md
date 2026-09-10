@@ -120,6 +120,18 @@ release.
 - SLH-DSA KATs have ACVP-sourced *keys* but self-generated *signatures* — the upstream ACVP
   `sigGen` files (30–38 MB) were not curated in this pass; see
   [`tests/vectors/README.md`](tests/vectors/README.md#future-improvement-not-done-in-this-pass-recorded-for-the-next-one).
+- Published KATs cover **7 of the 12 SLH-DSA parameter sets** (all six SHA2 sets plus
+  `SHAKE-128s`). `SHAKE-128f`, `SHAKE-192s`, `SHAKE-192f`, `SHAKE-256s` and `SHAKE-256f` have
+  no published vectors in this pass — SLH-DSA signing wall-time was the constraint; see
+  [`tests/vectors/README.md`](tests/vectors/README.md).
+- Test coverage is uneven across the SLH-DSA SHAKE sets: **`SHAKE-192s` and `SHAKE-192f` have
+  no automated tests**, and `SHAKE-256f` is covered only by a Multikey encoding check that
+  never signs or verifies. All three are exposed API and are thin wrappers over the same
+  upstream `slh-dsa` generics as the covered sets, but that wiring is not asserted by a test.
+- Of the 132 published vectors, **15 are verbatim NIST ACVP `ML-DSA-sigVer` cases** (5 each for
+  ML-DSA-44/65/87, carrying NIST's own `pk`/`message`/`ctx`/`signature` and expected result).
+  The other 117 use ACVP-derived *key material* with signatures this crate generated itself, so
+  they are round-trip/self-consistency tests rather than independent cross-validation.
 - `pqc-sig-wasm` does not bind FN-DSA or `hybrid` (unchanged from 0.3.x) — WASM exposes ML-DSA
   and SLH-DSA only.
 

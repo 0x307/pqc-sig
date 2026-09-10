@@ -46,7 +46,8 @@ ML-DSA-65/87 rather than silently under-securing the signature. See
 [`examples/prehash_large_payload.rs`](examples/prehash_large_payload.rs).
 
 **S-5: External, independently-checkable proof.** 132 known-answer test vectors, with key
-material sourced from NIST's own ACVP-Server (not self-generated), are now published under
+material sourced from NIST's own ACVP-Server (not self-generated) — and 15 of them verbatim
+NIST ACVP `ML-DSA-sigVer` cases, signature and expected result included — are now published under
 [`tests/vectors/`](tests/vectors/), executed on every `cargo test`, and shipped inside the
 packaged crate so downstream consumers can verify this implementation offline without
 depending on any network service. A new WASM CI workflow
@@ -84,6 +85,18 @@ functions are unchanged. If you consume `wit/pqc-sig.wit`, the package name is n
   upstream ACVP `SLH-DSA-sigGen`/`sigVer` files (30–38 MB) were not curated in this pass. See
   [`tests/vectors/README.md`](tests/vectors/README.md) for the exact per-vector provenance and
   what's planned next.
+- Published KATs cover **7 of the 12 SLH-DSA parameter sets** (all six SHA2 sets plus
+  `SHAKE-128s`). `SHAKE-128f`, `SHAKE-192s/f` and `SHAKE-256s/f` have no published vectors in
+  this pass — SLH-DSA signing wall-time was the constraint.
+- Test coverage is uneven across the SLH-DSA SHAKE sets: **`SHAKE-192s` and `SHAKE-192f` have
+  no automated tests**, and `SHAKE-256f` is covered only by a Multikey encoding check that never
+  signs or verifies. All three are exposed API and are thin wrappers over the same upstream
+  `slh-dsa` generics as the covered sets, but that wiring is not currently asserted by a test.
+- Of the 132 published vectors, **15 are verbatim NIST ACVP `ML-DSA-sigVer` cases** (5 each for
+  ML-DSA-44/65/87). The other 117 pair ACVP-derived *key material* with signatures this crate
+  generated itself, making them round-trip/self-consistency tests rather than independent
+  cross-validation. See [`tests/vectors/README.md`](tests/vectors/README.md) for per-vector
+  provenance.
 - `pqc-sig-wasm` still does not bind FN-DSA or `hybrid` (unchanged from 0.3.x) — only ML-DSA
   and SLH-DSA are exposed to WASM/JS.
 - The hybrid bridge's Ed25519-half context framing (`0x00 ‖ len(ctx) ‖ ctx ‖ msg`) is a
@@ -96,8 +109,9 @@ functions are unchanged. If you consume `wit/pqc-sig.wit`, the package name is n
   new ctx tests); `ml_dsa` integration: 40; `slh_dsa` integration: 46; `fn_dsa` integration:
   27; `kat_tests`: 11; `multibase_tests`: 13; `ssi_interop_test`: 7; doctests: 8 passed / 4
   ignored.
-- **132 published KAT vectors** across 10 files under [`tests/vectors/`](tests/vectors/),
-  executed by `kat_tests`, byte-reproducible via
+- **132 published KAT vectors** across 10 files under [`tests/vectors/`](tests/vectors/)
+  — covering 7 of 12 SLH-DSA parameter sets, of which 15 vectors are verbatim NIST ACVP
+  sigVer cases — executed by `kat_tests`, byte-reproducible via
   [`examples/gen_kat_vectors.rs`](examples/gen_kat_vectors.rs).
 - **22/22 WASM functional tests** via `node test-wasm.mjs` against the `wasm-pack`-built
   `pqc-sig-wasm` artifact.
