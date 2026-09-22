@@ -2,13 +2,19 @@
 
 > [!WARNING]
 > **These figures are not stable on the machine that produced them.**
-> 27 of 29 benchmarks moved more than
+> 11 of 29 benchmarks moved more than
 > 5% against the previous run of the same code,
-> the worst by **-91.4%** (`ml-dsa-44/sign_deterministic`).
+> the worst by **+29.0%** (`ml-dsa-44/keygen`).
 >
 > Treat the absolute numbers below as indicative only. Comparisons *within* a
-> single run remain meaningful, because every operation throttles together —
-> so "A is twice B" survives what "A is 29.8 ms" does not.
+> single run hold up better, because every operation throttles together — so
+> "A is roughly twice B" survives what "A is 29.8 ms" does not.
+>
+> That is a weaker guarantee than it sounds, and it has already failed once
+> here: a within-run comparison of two signing benchmarks was read as a 35%
+> difference and published with an explanation, and it did not reproduce. For
+> the signing groups specifically, anything under roughly 10% is below this
+> harness's resolution. See **A result that needed explaining** below.
 >
 > See **Measurement stability** below.
 
@@ -29,7 +35,7 @@ node scripts/bench-report.mjs > BENCHMARKS.md
 | | |
 |---|---|
 | Crate version | `0.4.0` |
-| Commit | `ffa7f7a` (working tree dirty) |
+| Commit | `a78b1f3` (working tree dirty) |
 | Date | 2026-09-22 |
 | Toolchain | rustc 1.97.0 (2d8144b78 2026-07-07) |
 | CPU | AMD Ryzen 5 7520U with Radeon Graphics |
@@ -70,81 +76,114 @@ draw of a random variable rather than its average.
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 13.40 ms | 13.05 ms – 14.57 ms |
-| `sign` | 617.7 µs | 602.0 µs – 649.2 µs |
-| `sign_ctx` | 530.5 µs | 515.1 µs – 545.1 µs |
-| `verify` | 30.4 µs | 30.3 µs – 30.7 µs |
+| `keygen` | 13.18 ms | 12.09 ms – 14.63 ms |
+| `sign` | 490.0 µs | 489.4 µs – 491.3 µs |
+| `sign_ctx` | 493.2 µs | 492.0 µs – 494.3 µs |
+| `verify` | 35.7 µs | 34.6 µs – 37.2 µs |
 
 ### fn-dsa-512
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 2.95 ms | 2.87 ms – 3.20 ms |
-| `sign` | 246.8 µs | 246.0 µs – 248.0 µs |
-| `sign_ctx` | 246.7 µs | 245.7 µs – 247.7 µs |
-| `verify` | 15.7 µs | 15.6 µs – 15.8 µs |
+| `keygen` | 2.91 ms | 2.88 ms – 2.94 ms |
+| `sign` | 244.6 µs | 244.2 µs – 245.4 µs |
+| `sign_ctx` | 244.8 µs | 244.0 µs – 245.3 µs |
+| `verify` | 15.0 µs | 15.0 µs – 15.1 µs |
 
 ### ml-dsa-44
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 367.4 µs | 366.3 µs – 368.9 µs |
-| `sign` | 414.1 µs | 410.8 µs – 417.0 µs |
-| `sign_ctx_deterministic` | 425.8 µs | 423.6 µs – 427.6 µs |
-| `sign_deterministic` | 412.6 µs | 410.8 µs – 414.5 µs |
-| `verify` | 268.8 µs | 268.0 µs – 269.3 µs |
-| `verify_ctx` | 269.7 µs | 268.8 µs – 270.5 µs |
+| `keygen` | 465.2 µs | 451.0 µs – 481.4 µs |
+| `sign` | 398.1 µs | 394.4 µs – 401.0 µs |
+| `sign_ctx_deterministic` | 451.8 µs | 448.7 µs – 455.3 µs |
+| `sign_deterministic` | 397.0 µs | 393.5 µs – 399.7 µs |
+| `verify` | 261.3 µs | 260.9 µs – 262.1 µs |
+| `verify_ctx` | 262.0 µs | 261.6 µs – 262.7 µs |
 
 ### ml-dsa-65
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 616.5 µs | 615.1 µs – 618.2 µs |
-| `sign` | 846.1 µs | 841.6 µs – 857.2 µs |
-| `sign_ctx_deterministic` | 569.0 µs | 561.5 µs – 576.1 µs |
-| `sign_deterministic` | 859.9 µs | 856.1 µs – 869.4 µs |
-| `verify` | 466.4 µs | 465.1 µs – 469.7 µs |
-| `verify_ctx` | 475.2 µs | 472.8 µs – 477.3 µs |
+| `keygen` | 612.4 µs | 611.3 µs – 613.7 µs |
+| `sign` | 781.6 µs | 772.4 µs – 789.7 µs |
+| `sign_ctx_deterministic` | 718.8 µs | 704.6 µs – 729.8 µs |
+| `sign_deterministic` | 778.8 µs | 768.2 µs – 784.1 µs |
+| `verify` | 446.5 µs | 445.5 µs – 447.7 µs |
+| `verify_ctx` | 449.2 µs | 448.4 µs – 450.0 µs |
 
 ### ml-dsa-87
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 1.07 ms | 1.06 ms – 1.08 ms |
-| `sign` | 846.0 µs | 834.1 µs – 870.1 µs |
-| `sign_ctx_deterministic` | 675.2 µs | 670.0 µs – 681.0 µs |
-| `sign_deterministic` | 824.8 µs | 820.6 µs – 836.2 µs |
-| `verify` | 833.1 µs | 830.0 µs – 837.4 µs |
-| `verify_ctx` | 825.6 µs | 823.7 µs – 827.6 µs |
+| `keygen` | 1.01 ms | 1.01 ms – 1.01 ms |
+| `sign` | 705.0 µs | 697.2 µs – 717.2 µs |
+| `sign_ctx_deterministic` | 759.9 µs | 742.0 µs – 772.8 µs |
+| `sign_deterministic` | 702.2 µs | 692.5 µs – 708.6 µs |
+| `verify` | 789.1 µs | 788.2 µs – 790.8 µs |
+| `verify_ctx` | 790.9 µs | 788.3 µs – 792.7 µs |
 
 ### slh-dsa-sha2-128
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `128f_sign` | 8.23 ms | 8.20 ms – 8.27 ms |
-| `128f_verify` | 460.1 µs | 459.1 µs – 460.6 µs |
-| `128s_sign` | 172.62 ms | 172.17 ms – 173.94 ms |
+| `128f_sign` | 8.53 ms | 8.49 ms – 8.69 ms |
+| `128f_verify` | 450.2 µs | 449.4 µs – 453.0 µs |
+| `128s_sign` | 177.34 ms | 177.17 ms – 177.55 ms |
 
-## One result that needs explaining
+## A result that needed explaining, and turned out to be noise
 
-At ML-DSA-65 and -87, `sign_ctx_deterministic` is faster than
-`sign_deterministic` — about 35% at 65. Adding a context cannot make signing
-cheaper, so the figure looks wrong, and the explanation is that the two are
-not the same code path:
+An earlier revision of this document reported that `sign_ctx_deterministic`
+was about 35% *faster* than `sign_deterministic` at ML-DSA-65 and -87, and
+explained it by claiming the two reach different underlying APIs — that the
+context variant goes through `expanded_key()` and the plain one does not, so
+`sign_deterministic` was leaving time on the table.
 
-```rust
-sign_deterministic:     self.signing_key.try_sign(message)
-sign_ctx_deterministic: self.signing_key.expanded_key().sign_deterministic(message, ctx)
-```
+That explanation was wrong, and so was the measurement. Both are recorded here
+rather than deleted, because the wrong version was published (0X3-195).
 
-The context variant goes through `expanded_key()` and the plain one does not.
-So the gap is an artifact of which underlying API each wrapper reaches for,
-and `sign_deterministic` is leaving time on the table rather than
-`sign_ctx_deterministic` performing magic. ML-DSA-44 shows no such gap.
+**The two are the same code path.** In `ml-dsa` 0.1.1, `SigningKey::try_sign`
+delegates to `try_multipart_sign`, which calls
+`self.expanded_key.raw_sign_deterministic(msg, &[])`. `expanded_key()` is a
+field accessor, not an expansion step. `sign_deterministic(M, ctx)` on the
+expanded key calls `raw_sign_deterministic(&[M], ctx)`. With an empty context
+these are the identical call, which is why
+`ml_dsa_65_empty_ctx_interoperates_with_legacy_api` in
+`tests/ml_dsa_tests.rs` passes: it asserts the two produce byte-identical
+signatures. That test was already in the suite while this document claimed the
+paths differed.
 
-This is recorded rather than quietly smoothed over because it is the kind of
-number a reader is right to distrust, and because it is a real finding: it was
-invisible until these benchmarks existed.
+**The gap does not reproduce.** Measured directly at ML-DSA-65 under this
+file's bench profile, over six independently generated keys and a
+2048-message pool, with the machine warmed first and both orderings tried:
+
+| | `sign_ctx_deterministic` ÷ `sign_deterministic` |
+|---|---:|
+| across six keys | 0.905, 0.923, 0.951, 0.957, 0.971, 1.030 |
+| mean | 0.956 |
+
+The ratio straddles 1.0, which is where it belongs. Mean signing cost over the
+same six keys ranged 650–761 µs, so **key-to-key variation is larger than the
+effect that was reported as a finding.**
+
+**What the harness could not resolve.** Each group signs with one key and, at
+the time, cycled only 64 messages. Deterministic signing fixes each message's
+rejection-loop cost, so criterion's ten thousand iterations re-measured the
+same 64 fixed costs over and over: the reported mean was an estimate from 64
+samples no matter how long the run took. The pool is 512 now, but the
+single-key limit remains, and it bounds what this table can say. **Differences
+smaller than roughly 10% between two signing benchmarks are below the
+resolution of this harness and are not findings.**
+
+The run that produced the 35% figure also straddled a change to the harness
+itself — the fix that introduced the message pool — so it compared two
+different experiments. The drift table below carried shifts of ±90% at the
+time. That was the signal the run was not comparable, and it was read as a
+result instead.
+
+The lesson kept: a benchmark result that contradicts what the algorithm can do
+is a claim about the harness until proven otherwise. This one was published as
+a property of the crate before anyone read the dependency's source.
 ## Measurement stability
 
 Criterion's confidence intervals above measure variation **within** a run.
@@ -156,22 +195,21 @@ This section reports the shift against the previous run of this suite. If the
 code did not change in between, everything here is measurement noise by
 definition.
 
-**Unstable.** 27 of 29 benchmarks moved more than 5% against the previous run.
+**Unstable.** 11 of 29 benchmarks moved more than 5% against the previous run.
 
 | Benchmark | Shift |
 |---|---:|
-| `ml-dsa-44/sign_deterministic` | -91.4% |
-| `ml-dsa-44/sign` | -91.1% |
-| `ml-dsa-44/sign_ctx_deterministic` | -76.2% |
-| `slh-dsa-sha2-128/128f_verify` | -67.6% |
-| `slh-dsa-sha2-128/128s_sign` | -64.2% |
-| `slh-dsa-sha2-128/128f_sign` | -63.9% |
-| `ml-dsa-65/sign_ctx_deterministic` | +46.5% |
-| `ml-dsa-44/keygen` | -41.2% |
-| `fn-dsa-1024/verify` | -21.9% |
-| `ml-dsa-65/keygen` | -19.4% |
-| `ml-dsa-44/verify` | -19.4% |
-| `ml-dsa-87/sign_ctx_deterministic` | +19.1% |
+| `ml-dsa-44/keygen` | +29.0% |
+| `ml-dsa-44/sign_ctx_deterministic` | -22.1% |
+| `fn-dsa-1024/verify` | +21.2% |
+| `ml-dsa-44/sign_deterministic` | -15.2% |
+| `ml-dsa-44/sign` | -14.7% |
+| `ml-dsa-65/sign` | +13.1% |
+| `ml-dsa-65/sign_deterministic` | +12.5% |
+| `ml-dsa-87/sign_deterministic` | -9.7% |
+| `ml-dsa-87/sign` | -9.4% |
+| `slh-dsa-sha2-128/128f_verify` | +5.3% |
+| `ml-dsa-87/sign_ctx_deterministic` | -5.0% |
 
 A laptop under sustained benchmark load throttles, and the effect compounds
 across a long suite: the operations measured last are measured on the hottest
@@ -199,3 +237,4 @@ Stated so the absence is not mistaken for a result.
 - **Comparison against anything.** No classical baseline, no "PQC overhead"
   aggregate. An aggregate hides which operation moved, and a comparison
   invites a headline detached from the harness that produced it.
+ok: 29 benchmarks across 6 groups

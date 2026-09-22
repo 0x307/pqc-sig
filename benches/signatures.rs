@@ -36,7 +36,14 @@ use pqc_sig::{MlDsa44Keypair, MlDsa65Keypair, MlDsa87Keypair};
 const MESSAGE: &[u8; 128] = &[0x41; 128];
 
 /// How many distinct messages the signing benchmarks cycle through.
-const POOL: usize = 64;
+///
+/// Raised from 64 to 512 for 0X3-195. Deterministic signing gives each
+/// message a *fixed* rejection-loop cost, so criterion running ten thousand
+/// iterations over a 64-message pool re-measures the same 64 fixed costs a
+/// hundred and fifty times over. The reported mean is an estimate from 64
+/// samples however long the run takes: its error shrinks with the pool, and
+/// not at all with criterion's iteration count.
+const POOL: usize = 512;
 
 /// A pool of distinct messages.
 ///
@@ -53,6 +60,20 @@ const POOL: usize = 64;
 ///
 /// Cycling a pool averages over the distribution. The index arithmetic costs
 /// nanoseconds against operations that cost hundreds of microseconds.
+///
+/// # The limit this still has, which bounds what the table can claim
+///
+/// Each group signs with **one key**, and signing cost varies by key. Measured
+/// at ML-DSA-65 over six independently generated keys and a 2048-message pool,
+/// mean signing cost ranged 650–761 µs, and the ratio between
+/// `sign_ctx_deterministic` and `sign_deterministic` ranged 0.905 to 1.030 —
+/// straddling 1.0, which is where it belongs, since both wrappers reach the
+/// same `raw_sign_deterministic` and a context only changes `mu`.
+///
+/// So differences smaller than roughly 10% between two signing benchmarks are
+/// below this harness's resolution and must not be read as findings. An
+/// earlier revision read one such difference as a 35% speedup and published an
+/// explanation for it. See BENCHMARKS.md.
 fn message_pool() -> Vec<[u8; 128]> {
     (0..POOL)
         .map(|i| {

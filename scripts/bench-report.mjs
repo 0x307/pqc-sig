@@ -190,8 +190,14 @@ ${
 > the worst by **${pct(worst.drift)}** (\`${worst.group}/${worst.bench}\`).
 >
 > Treat the absolute numbers below as indicative only. Comparisons *within* a
-> single run remain meaningful, because every operation throttles together —
-> so "A is twice B" survives what "A is 29.8 ms" does not.
+> single run hold up better, because every operation throttles together — so
+> "A is roughly twice B" survives what "A is 29.8 ms" does not.
+>
+> That is a weaker guarantee than it sounds, and it has already failed once
+> here: a within-run comparison of two signing benchmarks was read as a 35%
+> difference and published with an explanation, and it did not reproduce. For
+> the signing groups specifically, anything under roughly 10% is below this
+> harness's resolution. See **A result that needed explaining** below.
 >
 > See **Measurement stability** below.
 `
@@ -261,26 +267,59 @@ for (const g of groups) {
   md += "\n";
 }
 
-md += `## One result that needs explaining
+md += `## A result that needed explaining, and turned out to be noise
 
-At ML-DSA-65 and -87, \`sign_ctx_deterministic\` is faster than
-\`sign_deterministic\` — about 35% at 65. Adding a context cannot make signing
-cheaper, so the figure looks wrong, and the explanation is that the two are
-not the same code path:
+An earlier revision of this document reported that \`sign_ctx_deterministic\`
+was about 35% *faster* than \`sign_deterministic\` at ML-DSA-65 and -87, and
+explained it by claiming the two reach different underlying APIs — that the
+context variant goes through \`expanded_key()\` and the plain one does not, so
+\`sign_deterministic\` was leaving time on the table.
 
-\`\`\`rust
-sign_deterministic:     self.signing_key.try_sign(message)
-sign_ctx_deterministic: self.signing_key.expanded_key().sign_deterministic(message, ctx)
-\`\`\`
+That explanation was wrong, and so was the measurement. Both are recorded here
+rather than deleted, because the wrong version was published (0X3-195).
 
-The context variant goes through \`expanded_key()\` and the plain one does not.
-So the gap is an artifact of which underlying API each wrapper reaches for,
-and \`sign_deterministic\` is leaving time on the table rather than
-\`sign_ctx_deterministic\` performing magic. ML-DSA-44 shows no such gap.
+**The two are the same code path.** In \`ml-dsa\` 0.1.1, \`SigningKey::try_sign\`
+delegates to \`try_multipart_sign\`, which calls
+\`self.expanded_key.raw_sign_deterministic(msg, &[])\`. \`expanded_key()\` is a
+field accessor, not an expansion step. \`sign_deterministic(M, ctx)\` on the
+expanded key calls \`raw_sign_deterministic(&[M], ctx)\`. With an empty context
+these are the identical call, which is why
+\`ml_dsa_65_empty_ctx_interoperates_with_legacy_api\` in
+\`tests/ml_dsa_tests.rs\` passes: it asserts the two produce byte-identical
+signatures. That test was already in the suite while this document claimed the
+paths differed.
 
-This is recorded rather than quietly smoothed over because it is the kind of
-number a reader is right to distrust, and because it is a real finding: it was
-invisible until these benchmarks existed.
+**The gap does not reproduce.** Measured directly at ML-DSA-65 under this
+file's bench profile, over six independently generated keys and a
+2048-message pool, with the machine warmed first and both orderings tried:
+
+| | \`sign_ctx_deterministic\` ÷ \`sign_deterministic\` |
+|---|---:|
+| across six keys | 0.905, 0.923, 0.951, 0.957, 0.971, 1.030 |
+| mean | 0.956 |
+
+The ratio straddles 1.0, which is where it belongs. Mean signing cost over the
+same six keys ranged 650–761 µs, so **key-to-key variation is larger than the
+effect that was reported as a finding.**
+
+**What the harness could not resolve.** Each group signs with one key and, at
+the time, cycled only 64 messages. Deterministic signing fixes each message's
+rejection-loop cost, so criterion's ten thousand iterations re-measured the
+same 64 fixed costs over and over: the reported mean was an estimate from 64
+samples no matter how long the run took. The pool is 512 now, but the
+single-key limit remains, and it bounds what this table can say. **Differences
+smaller than roughly 10% between two signing benchmarks are below the
+resolution of this harness and are not findings.**
+
+The run that produced the 35% figure also straddled a change to the harness
+itself — the fix that introduced the message pool — so it compared two
+different experiments. The drift table below carried shifts of ±90% at the
+time. That was the signal the run was not comparable, and it was read as a
+result instead.
+
+The lesson kept: a benchmark result that contradicts what the algorithm can do
+is a claim about the harness until proven otherwise. This one was published as
+a property of the crate before anyone read the dependency's source.
 `;
 
 md += `## Measurement stability
