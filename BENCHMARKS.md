@@ -29,18 +29,25 @@ node scripts/bench-report.mjs > BENCHMARKS.md
 | | |
 |---|---|
 | Crate version | `0.4.0` |
-| Commit | `47f213f` (working tree dirty) |
+| Commit | `ffa7f7a` (working tree dirty) |
 | Date | 2026-09-22 |
 | Toolchain | rustc 1.97.0 (2d8144b78 2026-07-07) |
 | CPU | AMD Ryzen 5 7520U with Radeon Graphics |
 | Profile | `[profile.bench]`: `opt-level = 3`, `lto = true`, `codegen-units = 1` |
 | Harness | [`benches/signatures.rs`](benches/signatures.rs) |
 
-**The profile matters.** This crate's `[profile.release]` is `opt-level = "z"`,
-because what it ships is a size-constrained WASM target. Benchmarks use a
-separate `[profile.bench]` at `opt-level = 3`. A figure measured under `"z"`
-describes a build nobody benchmarks for, and the first run of this suite did
-exactly that before the profile was split out.
+**The profile matters.** This crate's `[profile.release]` sets
+`opt-level = "z"`, and `[profile.bench]` would inherit it. The first run of
+this suite did exactly that and published figures for a size-optimised build
+with nothing saying so, which is why the bench profile is now stated
+explicitly at `opt-level = 3`.
+
+Worth being precise about what that release setting is and is not. `pqc-sig`
+is an `rlib`; the WASM artifact and its JS bindings live in the sibling
+`pqc-sig-wasm` crate. A library's own `[profile.release]` does not govern how
+a consumer compiles it either — the consuming build's profile does. So
+`opt-level = "z"` here affects this crate's *own* standalone builds, and
+little else.
 
 ## What these are
 
@@ -184,9 +191,8 @@ Stated so the absence is not mistaken for a result.
 - **The `hybrid` feature.** It combines Ed25519 with ML-DSA-65, and Ed25519 is
   classical. It exists for interoperating with systems that have not moved yet
   and is deliberately not part of this crate's performance story.
-- **WASM.** Every figure here is native. The shipped `opt-level = "z"` build
-  will be slower, and by how much is not something this suite currently
-  answers.
+- **WASM.** Every figure here is native. The WASM artifact is built by the
+  sibling `pqc-sig-wasm` crate, which this suite does not measure at all.
 - **Constant-time behaviour.** A median and a confidence interval say nothing
   about whether timing varies with secret data. That needs a different tool
   and a different claim.
