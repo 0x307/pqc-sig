@@ -28,7 +28,8 @@
 //! is comparable across runs rather than chosen per-benchmark.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use rand::rngs::OsRng;
+use rand::rngs::{OsRng, StdRng};
+use rand::SeedableRng;
 
 use pqc_sig::{MlDsa44Keypair, MlDsa65Keypair, MlDsa87Keypair};
 
@@ -70,19 +71,19 @@ const POOL: usize = 512;
 /// straddling 1.0, which is where it belongs, since both wrappers reach the
 /// same `raw_sign_deterministic` and a context only changes `mu`.
 ///
-/// The key is also regenerated on every run (`generate(&mut OsRng)` below), so
-/// criterion's run-to-run comparison for a signing benchmark is one key's cost
-/// against another's. On a steady dedicated-core machine that has moved
-/// ML-DSA-87 signing by as much as 18% between consecutive runs.
+/// The key each group signs with is now derived from a fixed seed
+/// (`fixed_key!`), so every run signs with the same key and criterion's
+/// run-to-run comparison is like for like. Before this, the key was
+/// regenerated on every run, and on a steady dedicated-core machine that moved
+/// ML-DSA-87 signing by as much as 18% between consecutive runs, because each
+/// run was measuring a different key.
 ///
-/// So treat signing figures as ±20%: differences smaller than that between two
-/// signing benchmarks are below this harness's resolution and must not be read
-/// as findings. An earlier revision read one such difference as a 35% speedup
-/// and published an explanation for it. See BENCHMARKS.md.
-///
-/// The fix is to derive the key from a fixed seed, so every run signs with the
-/// same one. Not done yet because it changes what the published table
-/// measures, and that wants a fresh stable-clock run to go with it.
+/// A fixed key does not remove the key-dependence itself, only its effect on
+/// run-to-run comparison. The table reports one key's signing cost, and across
+/// keys that varies by the 17% spread above, so absolute signing figures
+/// describe this key rather than ML-DSA in general. An earlier revision read a
+/// within-noise difference as a 35% speedup and published an explanation for
+/// it. See BENCHMARKS.md.
 fn message_pool() -> Vec<[u8; 128]> {
     (0..POOL)
         .map(|i| {
@@ -103,6 +104,38 @@ fn message_pool() -> Vec<[u8; 128]> {
 const CONTEXT: &[u8] = b"aethel-core/plp-present/v1";
 
 /// ML-DSA, FIPS 204. The family's default signature.
+/// Seed for the key each signing group signs with. Any constant will do; what
+/// matters is that it is the same on every run.
+const KEY_SEED: u64 = 0x0307_5eed;
+
+/// A deterministic RNG for generating that one key. `StdRng`'s algorithm is not
+/// guaranteed stable across `rand` versions, which is fine here: the lockfile
+/// pins `rand`, and what this needs is the same key from run to run of one
+/// build, not across releases.
+fn fixed_key_rng() -> StdRng {
+    StdRng::seed_from_u64(KEY_SEED)
+}
+
+/// The fixed signing key, generated twice to prove the premise it rests on:
+/// that `generate` derives the key from the RNG it is handed. `sign` ignores
+/// its RNG argument; if `generate` ever did the same, two keys from one seed
+/// would differ, the "fixed" key would not be fixed, and every signing figure
+/// would silently go back to comparing one key's cost against another's.
+/// Stopping the run is better than publishing that.
+macro_rules! fixed_key {
+    ($kp:ty) => {{
+        let a = <$kp>::generate(&mut fixed_key_rng()).expect("keygen");
+        let b = <$kp>::generate(&mut fixed_key_rng()).expect("keygen");
+        assert_eq!(
+            a.public_key(),
+            b.public_key(),
+            "{} ignored its seeded RNG, so the fixed-key premise is false",
+            stringify!($kp)
+        );
+        a
+    }};
+}
+
 fn ml_dsa(c: &mut Criterion) {
     macro_rules! bench_ml_dsa {
         ($name:literal, $kp:ty) => {{
@@ -112,7 +145,7 @@ fn ml_dsa(c: &mut Criterion) {
                 b.iter(|| <$kp>::generate(&mut OsRng).expect("keygen"))
             });
 
-            let kp = <$kp>::generate(&mut OsRng).expect("keygen");
+            let kp = fixed_key!($kp);
             let pk = kp.public_key();
             let pool = message_pool();
 
@@ -193,7 +226,7 @@ fn fn_dsa(c: &mut Criterion) {
             });
             group.sample_size(100);
 
-            let kp = <$kp>::generate(&mut OsRng).expect("keygen");
+            let kp = fixed_key!($kp);
             let pk = kp.public_key();
             let pool = message_pool();
 
@@ -254,7 +287,7 @@ fn slh_dsa(c: &mut Criterion) {
     // Both are orders of magnitude slower than the lattice schemes.
     group.sample_size(10);
 
-    let f = SlhDsaSha2_128fKeypair::generate(&mut OsRng).expect("keygen");
+    let f = fixed_key!(SlhDsaSha2_128fKeypair);
     group.bench_function("128f/sign", |b| {
         b.iter_batched(
             || (),
@@ -263,7 +296,7 @@ fn slh_dsa(c: &mut Criterion) {
         )
     });
 
-    let s = SlhDsaSha2_128sKeypair::generate(&mut OsRng).expect("keygen");
+    let s = fixed_key!(SlhDsaSha2_128sKeypair);
     group.bench_function("128s/sign", |b| {
         b.iter_batched(
             || (),

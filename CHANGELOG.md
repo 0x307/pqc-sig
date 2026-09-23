@@ -7,6 +7,24 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [Unreleased]
+
+No library code changes.
+
+### Changed
+
+- **The signing benchmarks sign with a fixed key.** The key each signing group signs with
+  is now derived from a fixed seed, so every run signs with the same key and criterion's
+  run-to-run comparison is like for like. Previously each run generated a fresh key, and
+  because signing cost depends on the key, ML-DSA-87 signing moved as much as 18% between
+  consecutive runs on a steady machine purely from the change of key. That was why 0.4.1's
+  `BENCHMARKS.md` had to describe signing figures as ±20%.
+- The harness generates the fixed key twice and asserts both are identical before
+  benchmarking. `sign` ignores its RNG argument; if `generate` ever did the same, the run
+  stops rather than silently returning to comparing different keys.
+- A fixed key does not remove key-dependence. Absolute signing figures describe one key,
+  and across keys signing cost varies by about 17%. `BENCHMARKS.md` says so.
+
 ## [0.4.1] - 2026-09-23
 
 No library code changes. `src/` is identical to 0.4.0; this release exists to

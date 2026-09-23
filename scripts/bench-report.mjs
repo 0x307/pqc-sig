@@ -207,9 +207,10 @@ ${
 > That is a weaker guarantee than it sounds, and it has already failed once
 > here: a within-run comparison of two signing benchmarks was read as a 35%
 > difference and published with an explanation, and it did not reproduce. For
-> the signing groups specifically, anything under roughly 20% is below this
-> harness's resolution, because each run signs with a freshly generated key.
-> See **A result that needed explaining** below.
+> the signing groups specifically, a difference under roughly 10% between two
+> signing benchmarks is not a finding: each group signs with one key, and two
+> signing variants of identical code have differed by up to 10% depending on
+> which key it is. See **A result that needed explaining** below.
 >
 > See **Measurement stability** below.
 `
@@ -320,16 +321,16 @@ so criterion's ten thousand iterations re-measured the same 64 fixed costs
 over and over: the reported mean was an estimate from 64 samples however long
 the run took. The pool is 512 now.
 
-The larger limit is the key. Signing cost depends on it, and each run of this
-suite generates a fresh one, so criterion's run-to-run comparison for a signing
-benchmark compares one key's cost against a different key's. Across six
+The larger limit is the key. Signing cost depends on it: across six
 independent keys at ML-DSA-65, mean signing cost ranged 650–761 µs, a 17%
-spread. On a steady dedicated-core machine, ML-DSA-87 signing has moved as much
-as 18% between consecutive runs for exactly this reason. **Treat signing
-figures as ±20%, and do not read a difference smaller than that between two
-signing benchmarks as a finding.** Key generation and verification are not
-affected. Deriving the benchmark key from a fixed seed would remove the effect,
-and is the planned fix.
+spread. Every run of this suite now signs with the same key, derived from a
+fixed seed, so criterion's run-to-run comparison is like for like. Before
+that, each run generated a fresh key, and on a steady dedicated-core machine
+ML-DSA-87 signing moved as much as 18% between consecutive runs purely from
+the change of key. What a fixed key cannot change is that the absolute signing
+figures describe one key. **Read them as within about 17% of what another key
+would cost, and do not read a difference under roughly 10% between two signing
+benchmarks as a finding.** Key generation and verification are not affected.
 
 The run that produced the 35% figure also straddled a change to the harness
 itself — the fix that introduced the message pool — so it compared two
