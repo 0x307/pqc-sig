@@ -19,7 +19,7 @@ node scripts/bench-report.mjs > BENCHMARKS.md
 | Crate version | `0.4.0` |
 | Commit | `b2e2b87` |
 | Date | 2026-09-23 |
-| Toolchain | unknown |
+| Toolchain | rustc 1.98.1 (48a229cea 2026-09-01) |
 | CPU | Intel(R) Xeon(R) Platinum 8488C |
 | Profile | `[profile.bench]`: `opt-level = 3`, `lto = true`, `codegen-units = 1` |
 | Harness | [`benches/signatures.rs`](benches/signatures.rs) |
@@ -148,14 +148,22 @@ The ratio straddles 1.0, which is where it belongs. Mean signing cost over the
 same six keys ranged 650–761 µs, so **key-to-key variation is larger than the
 effect that was reported as a finding.**
 
-**What the harness could not resolve.** Each group signs with one key and, at
-the time, cycled only 64 messages. Deterministic signing fixes each message's
-rejection-loop cost, so criterion's ten thousand iterations re-measured the
-same 64 fixed costs over and over: the reported mean was an estimate from 64
-samples no matter how long the run took. The pool is 512 now, but the
-single-key limit remains, and it bounds what this table can say. **Differences
-smaller than roughly 10% between two signing benchmarks are below the
-resolution of this harness and are not findings.**
+**What the harness could not resolve.** At the time, each group cycled only
+64 messages. Deterministic signing fixes each message's rejection-loop cost,
+so criterion's ten thousand iterations re-measured the same 64 fixed costs
+over and over: the reported mean was an estimate from 64 samples however long
+the run took. The pool is 512 now.
+
+The larger limit is the key. Signing cost depends on it, and each run of this
+suite generates a fresh one, so criterion's run-to-run comparison for a signing
+benchmark compares one key's cost against a different key's. Across six
+independent keys at ML-DSA-65, mean signing cost ranged 650–761 µs, a 17%
+spread. On a steady dedicated-core machine, ML-DSA-87 signing has moved as much
+as 18% between consecutive runs for exactly this reason. **Treat signing
+figures as ±20%, and do not read a difference smaller than that between two
+signing benchmarks as a finding.** Key generation and verification are not
+affected. Deriving the benchmark key from a fixed seed would remove the effect,
+and is the planned fix.
 
 The run that produced the 35% figure also straddled a change to the harness
 itself — the fix that introduced the message pool — so it compared two

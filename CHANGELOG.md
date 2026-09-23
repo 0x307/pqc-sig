@@ -35,12 +35,15 @@ ship measured performance figures alongside the crate.
 
 ### Known limitations of the figures
 
-- **Single-key signing benchmarks resolve to roughly 10%.** Each ML-DSA group
-  signs with one key over a 512-message pool, and signing cost varies by key.
-  Across six independent keys at ML-DSA-65, mean signing cost ranged 650–761 µs.
-  Differences smaller than about 10% between two signing benchmarks are below
-  what this harness can resolve and should not be read as findings.
-  Key generation and verification are not affected.
+- **Signing figures are ±20%.** Signing cost depends on the key, and each
+  benchmark run generates a fresh one. Across six independent keys at
+  ML-DSA-65, mean signing cost ranged 650–761 µs, a 17% spread, and on the
+  dedicated-core machine that produced these figures ML-DSA-87 signing moved
+  up to 18% between consecutive runs. Differences smaller than about 20%
+  between two signing benchmarks are below what this harness can resolve and
+  should not be read as findings. Key generation and verification are not
+  affected. Deriving the benchmark key from a fixed seed would remove the
+  effect and is planned.
 
 - An earlier, unreleased revision of this document reported
   `sign_ctx_deterministic` as ~35% faster than `sign_deterministic` and

@@ -7,9 +7,9 @@ dedicated-core Intel Xeon Platinum 8488C. **No library code changes** — `src/`
 is identical to 0.4.0, so there is nothing to migrate and no behavior to
 re-verify.
 
-Signing figures carry a stated resolution limit of about 10%, because each
-group signs with a single key and signing cost varies by key. Key generation
-and verification are not affected. See `CHANGELOG.md` for detail.
+Signing figures are ±20%, because signing cost depends on the key and each
+benchmark run generates a fresh one. Key generation and verification are not
+affected. See `CHANGELOG.md` for detail.
 
 ## v0.4.0 (2026-09-09)
 

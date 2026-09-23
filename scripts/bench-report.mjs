@@ -207,8 +207,9 @@ ${
 > That is a weaker guarantee than it sounds, and it has already failed once
 > here: a within-run comparison of two signing benchmarks was read as a 35%
 > difference and published with an explanation, and it did not reproduce. For
-> the signing groups specifically, anything under roughly 10% is below this
-> harness's resolution. See **A result that needed explaining** below.
+> the signing groups specifically, anything under roughly 20% is below this
+> harness's resolution, because each run signs with a freshly generated key.
+> See **A result that needed explaining** below.
 >
 > See **Measurement stability** below.
 `
@@ -313,14 +314,22 @@ The ratio straddles 1.0, which is where it belongs. Mean signing cost over the
 same six keys ranged 650–761 µs, so **key-to-key variation is larger than the
 effect that was reported as a finding.**
 
-**What the harness could not resolve.** Each group signs with one key and, at
-the time, cycled only 64 messages. Deterministic signing fixes each message's
-rejection-loop cost, so criterion's ten thousand iterations re-measured the
-same 64 fixed costs over and over: the reported mean was an estimate from 64
-samples no matter how long the run took. The pool is 512 now, but the
-single-key limit remains, and it bounds what this table can say. **Differences
-smaller than roughly 10% between two signing benchmarks are below the
-resolution of this harness and are not findings.**
+**What the harness could not resolve.** At the time, each group cycled only
+64 messages. Deterministic signing fixes each message's rejection-loop cost,
+so criterion's ten thousand iterations re-measured the same 64 fixed costs
+over and over: the reported mean was an estimate from 64 samples however long
+the run took. The pool is 512 now.
+
+The larger limit is the key. Signing cost depends on it, and each run of this
+suite generates a fresh one, so criterion's run-to-run comparison for a signing
+benchmark compares one key's cost against a different key's. Across six
+independent keys at ML-DSA-65, mean signing cost ranged 650–761 µs, a 17%
+spread. On a steady dedicated-core machine, ML-DSA-87 signing has moved as much
+as 18% between consecutive runs for exactly this reason. **Treat signing
+figures as ±20%, and do not read a difference smaller than that between two
+signing benchmarks as a finding.** Key generation and verification are not
+affected. Deriving the benchmark key from a fixed seed would remove the effect,
+and is the planned fix.
 
 The run that produced the 35% figure also straddled a change to the harness
 itself — the fix that introduced the message pool — so it compared two

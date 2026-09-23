@@ -70,10 +70,19 @@ const POOL: usize = 512;
 /// straddling 1.0, which is where it belongs, since both wrappers reach the
 /// same `raw_sign_deterministic` and a context only changes `mu`.
 ///
-/// So differences smaller than roughly 10% between two signing benchmarks are
-/// below this harness's resolution and must not be read as findings. An
-/// earlier revision read one such difference as a 35% speedup and published an
-/// explanation for it. See BENCHMARKS.md.
+/// The key is also regenerated on every run (`generate(&mut OsRng)` below), so
+/// criterion's run-to-run comparison for a signing benchmark is one key's cost
+/// against another's. On a steady dedicated-core machine that has moved
+/// ML-DSA-87 signing by as much as 18% between consecutive runs.
+///
+/// So treat signing figures as ±20%: differences smaller than that between two
+/// signing benchmarks are below this harness's resolution and must not be read
+/// as findings. An earlier revision read one such difference as a 35% speedup
+/// and published an explanation for it. See BENCHMARKS.md.
+///
+/// The fix is to derive the key from a fixed seed, so every run signs with the
+/// same one. Not done yet because it changes what the published table
+/// measures, and that wants a fresh stable-clock run to go with it.
 fn message_pool() -> Vec<[u8; 128]> {
     (0..POOL)
         .map(|i| {
