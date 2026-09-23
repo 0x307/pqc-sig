@@ -7,6 +7,53 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [0.4.1] - 2026-09-23
+
+No library code changes. `src/` is identical to 0.4.0; this release exists to
+ship measured performance figures alongside the crate.
+
+### Added
+
+- **`BENCHMARKS.md`** — the cost of every signing, verification and key
+  generation operation the crate offers, across ML-DSA-44/65/87, FN-DSA-512/1024
+  and SLH-DSA-SHA2-128f/s. Measured on a dedicated-core Intel Xeon Platinum
+  8488C, not a laptop, and regenerated from criterion's own JSON by
+  `scripts/bench-report.mjs` rather than written by hand, so the table and the
+  harness that produced it cannot drift apart. Each figure is a median with a
+  95% confidence interval, and the document states its own provenance: crate
+  version, commit, toolchain, CPU, build profile and features.
+
+- **A stability check the document runs on itself.** Every suite is run three
+  times and only the third is reported: the first warms the machine and is
+  discarded, the second is a baseline, and the third is compared against it.
+  Anything that moved more than 5% between the last two runs of unchanged code
+  is listed by name, because a benchmark that moves without the code moving has
+  measured the machine rather than the crate.
+
+- `benches/signatures.rs`, the harness. `criterion` is a new dev-dependency
+  with its plotting stack disabled; nothing is added to what consumers build.
+
+### Known limitations of the figures
+
+- **Signing figures are ±20%.** Signing cost depends on the key, and each
+  benchmark run generates a fresh one. Across six independent keys at
+  ML-DSA-65, mean signing cost ranged 650–761 µs, a 17% spread, and on the
+  dedicated-core machine that produced these figures ML-DSA-87 signing moved
+  up to 18% between consecutive runs. Differences smaller than about 20%
+  between two signing benchmarks are below what this harness can resolve and
+  should not be read as findings. Key generation and verification are not
+  affected. Deriving the benchmark key from a fixed seed would remove the
+  effect and is planned.
+
+- An earlier, unreleased revision of this document reported
+  `sign_ctx_deterministic` as ~35% faster than `sign_deterministic` and
+  attributed it to the two reaching different APIs. Both claims were wrong:
+  with an empty context the two are the identical call into `ml-dsa`, as
+  `ml_dsa_65_empty_ctx_interoperates_with_legacy_api` already asserted, and the
+  gap did not reproduce across keys. It never shipped in a release. The
+  correction is written up in `BENCHMARKS.md` because the reasoning that
+  produced it is the most useful thing in that file. (`0X3-195`)
+
 ## [0.4.0] - 2026-09-09
 
 Per `STABILITY.md` §2/§4, this is a **purely additive, non-breaking** release — every

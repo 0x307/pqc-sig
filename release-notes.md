@@ -1,5 +1,16 @@
 # pqc-sig Release Notes
 
+## v0.4.1 (2026-09-23)
+
+Adds `BENCHMARKS.md`: measured cost of every operation the crate offers, on a
+dedicated-core Intel Xeon Platinum 8488C. **No library code changes** — `src/`
+is identical to 0.4.0, so there is nothing to migrate and no behavior to
+re-verify.
+
+Signing figures are ±20%, because signing cost depends on the key and each
+benchmark run generates a fresh one. Key generation and verification are not
+affected. See `CHANGELOG.md` for detail.
+
 ## v0.4.0 (2026-09-09)
 
 Closes five stakeholder-identified adoption gaps (S-1..S-5) blocking SAGP/8gentz-fabric

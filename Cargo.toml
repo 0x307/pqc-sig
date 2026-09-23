@@ -1,6 +1,6 @@
 [package]
 name        = "pqc-sig"
-version     = "0.4.0"
+version     = "0.4.1"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
@@ -107,6 +107,31 @@ sha3    = "0.10"
 # runtime deps): validates our to_multibase() output against decoders we did not write.
 ssi-multicodec = "0.2"
 multibase      = "0.9"
+
+# Benchmarks. In `benches/`, run by `cargo bench`, with a baseline and a
+# statistical model — as opposed to a file in `examples/` called `bench_*`,
+# which is a demo that runs when somebody remembers and is compared against
+# nothing. `default-features = false` drops criterion's plotting stack, which
+# pulls a large tree for HTML reports nobody reads in CI.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+# ── Benchmarks ────────────────────────────────────────────────────────────────
+[[bench]]
+name = "signatures"
+harness = false
+
+# Benchmarks measure speed, so they must not inherit the release profile's
+# `opt-level = "z"`. That setting is correct for what this crate ships — a
+# size-constrained WASM target — and wrong for a performance figure, which
+# would otherwise describe a build nobody benchmarks for.
+#
+# Found by benchmarking: the first run measured the size-optimised build and
+# produced figures that were slow across the board with no label saying why.
+[profile.bench]
+opt-level     = 3
+lto           = true
+codegen-units = 1
+debug         = true
 
 [profile.release]
 opt-level     = "z"
