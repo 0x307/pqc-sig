@@ -16,8 +16,8 @@ node scripts/bench-report.mjs > BENCHMARKS.md
 
 | | |
 |---|---|
-| Crate version | `0.4.0` |
-| Commit | `b2e2b87` |
+| Crate version | `0.4.1` |
+| Commit | `71c3dc1` |
 | Date | 2026-09-23 |
 | Toolchain | rustc 1.98.1 (48a229cea 2026-09-01) |
 | CPU | Intel(R) Xeon(R) Platinum 8488C |
@@ -58,60 +58,60 @@ draw of a random variable rather than its average.
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 15.00 ms | 14.07 ms – 15.83 ms |
-| `sign` | 470.4 µs | 469.6 µs – 471.6 µs |
-| `sign_ctx` | 466.7 µs | 465.7 µs – 467.7 µs |
-| `verify` | 27.1 µs | 27.1 µs – 27.2 µs |
+| `keygen` | 13.56 ms | 12.08 ms – 14.13 ms |
+| `sign` | 436.9 µs | 434.7 µs – 448.6 µs |
+| `sign_ctx` | 449.7 µs | 447.8 µs – 450.3 µs |
+| `verify` | 25.6 µs | 25.4 µs – 26.0 µs |
 
 ### fn-dsa-512
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 3.00 ms | 2.90 ms – 3.05 ms |
-| `sign` | 237.0 µs | 236.8 µs – 237.3 µs |
-| `sign_ctx` | 236.5 µs | 236.2 µs – 236.9 µs |
-| `verify` | 14.4 µs | 14.3 µs – 14.4 µs |
+| `keygen` | 2.84 ms | 2.80 ms – 2.98 ms |
+| `sign` | 238.8 µs | 235.7 µs – 240.2 µs |
+| `sign_ctx` | 217.3 µs | 217.1 µs – 217.5 µs |
+| `verify` | 13.2 µs | 13.2 µs – 13.2 µs |
 
 ### ml-dsa-44
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 349.1 µs | 348.7 µs – 349.8 µs |
-| `sign` | 346.3 µs | 344.3 µs – 349.2 µs |
-| `sign_ctx_deterministic` | 364.8 µs | 362.3 µs – 368.3 µs |
-| `sign_deterministic` | 348.3 µs | 345.4 µs – 351.6 µs |
-| `verify` | 243.8 µs | 243.4 µs – 244.2 µs |
-| `verify_ctx` | 241.1 µs | 240.7 µs – 241.5 µs |
+| `keygen` | 325.7 µs | 325.4 µs – 326.3 µs |
+| `sign` | 395.7 µs | 391.8 µs – 398.8 µs |
+| `sign_ctx_deterministic` | 361.0 µs | 357.2 µs – 363.7 µs |
+| `sign_deterministic` | 395.5 µs | 389.3 µs – 399.9 µs |
+| `verify` | 239.2 µs | 238.6 µs – 239.4 µs |
+| `verify_ctx` | 241.1 µs | 240.3 µs – 241.8 µs |
 
 ### ml-dsa-65
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 586.2 µs | 585.0 µs – 587.9 µs |
-| `sign` | 573.0 µs | 561.2 µs – 586.7 µs |
-| `sign_ctx_deterministic` | 588.5 µs | 580.8 µs – 600.8 µs |
-| `sign_deterministic` | 567.3 µs | 556.9 µs – 585.1 µs |
-| `verify` | 426.8 µs | 425.8 µs – 427.6 µs |
-| `verify_ctx` | 427.8 µs | 427.4 µs – 429.0 µs |
+| `keygen` | 580.2 µs | 579.5 µs – 581.7 µs |
+| `sign` | 504.1 µs | 499.9 µs – 514.0 µs |
+| `sign_ctx_deterministic` | 523.4 µs | 510.2 µs – 534.6 µs |
+| `sign_deterministic` | 521.6 µs | 513.6 µs – 527.6 µs |
+| `verify` | 414.7 µs | 409.6 µs – 416.2 µs |
+| `verify_ctx` | 422.0 µs | 421.2 µs – 423.1 µs |
 
 ### ml-dsa-87
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `keygen` | 982.0 µs | 980.7 µs – 983.2 µs |
-| `sign` | 736.4 µs | 732.8 µs – 744.4 µs |
-| `sign_ctx_deterministic` | 619.8 µs | 602.2 µs – 626.6 µs |
-| `sign_deterministic` | 742.2 µs | 737.5 µs – 749.1 µs |
-| `verify` | 747.2 µs | 746.1 µs – 748.7 µs |
-| `verify_ctx` | 748.2 µs | 747.6 µs – 749.4 µs |
+| `keygen` | 962.2 µs | 960.0 µs – 965.1 µs |
+| `sign` | 607.1 µs | 597.9 µs – 612.3 µs |
+| `sign_ctx_deterministic` | 638.8 µs | 628.7 µs – 645.5 µs |
+| `sign_deterministic` | 619.3 µs | 611.0 µs – 625.2 µs |
+| `verify` | 735.1 µs | 728.8 µs – 738.9 µs |
+| `verify_ctx` | 709.0 µs | 708.1 µs – 710.0 µs |
 
 ### slh-dsa-sha2-128
 
 | Operation | Median | 95% CI |
 |---|---:|---|
-| `128f_sign` | 8.06 ms | 8.04 ms – 8.10 ms |
-| `128f_verify` | 495.3 µs | 493.5 µs – 497.1 µs |
-| `128s_sign` | 168.43 ms | 168.10 ms – 168.85 ms |
+| `128f_sign` | 7.67 ms | 7.54 ms – 7.71 ms |
+| `128f_verify` | 467.8 µs | 464.7 µs – 468.2 µs |
+| `128s_sign` | 160.87 ms | 158.25 ms – 162.00 ms |
 
 ## A result that needed explaining, and turned out to be noise
 
@@ -154,16 +154,16 @@ so criterion's ten thousand iterations re-measured the same 64 fixed costs
 over and over: the reported mean was an estimate from 64 samples however long
 the run took. The pool is 512 now.
 
-The larger limit is the key. Signing cost depends on it, and each run of this
-suite generates a fresh one, so criterion's run-to-run comparison for a signing
-benchmark compares one key's cost against a different key's. Across six
+The larger limit is the key. Signing cost depends on it: across six
 independent keys at ML-DSA-65, mean signing cost ranged 650–761 µs, a 17%
-spread. On a steady dedicated-core machine, ML-DSA-87 signing has moved as much
-as 18% between consecutive runs for exactly this reason. **Treat signing
-figures as ±20%, and do not read a difference smaller than that between two
-signing benchmarks as a finding.** Key generation and verification are not
-affected. Deriving the benchmark key from a fixed seed would remove the effect,
-and is the planned fix.
+spread. Every run of this suite now signs with the same key, derived from a
+fixed seed, so criterion's run-to-run comparison is like for like. Before
+that, each run generated a fresh key, and on a steady dedicated-core machine
+ML-DSA-87 signing moved as much as 18% between consecutive runs purely from
+the change of key. What a fixed key cannot change is that the absolute signing
+figures describe one key. **Read them as within about 17% of what another key
+would cost, and do not read a difference under roughly 10% between two signing
+benchmarks as a finding.** Key generation and verification are not affected.
 
 The run that produced the 35% figure also straddled a change to the harness
 itself — the fix that introduced the message pool — so it compared two
@@ -185,16 +185,14 @@ This section reports the shift against the previous run of this suite. If the
 code did not change in between, everything here is measurement noise by
 definition.
 
-**Mixed.** 6 of 29 benchmarks moved more than 5% against the previous run, the worst by **+17.9%** (`ml-dsa-87/sign`). That is below the 33% of the suite it would take to call the whole run unstable, but it is not nothing.
+**Mixed.** 4 of 29 benchmarks moved more than 5% against the previous run, the worst by **+14.9%** (`fn-dsa-1024/keygen`). That is below the 33% of the suite it would take to call the whole run unstable, but it is not nothing.
 
 | Benchmark | Shift |
 |---|---:|
-| `ml-dsa-87/sign` | +17.9% |
-| `ml-dsa-87/sign_deterministic` | +16.9% |
-| `ml-dsa-87/sign_ctx_deterministic` | -10.3% |
-| `ml-dsa-44/sign_ctx_deterministic` | -9.5% |
-| `ml-dsa-44/sign_deterministic` | -8.6% |
-| `ml-dsa-44/sign` | -8.4% |
+| `fn-dsa-1024/keygen` | +14.9% |
+| `fn-dsa-512/sign` | +9.9% |
+| `ml-dsa-87/verify_ctx` | -6.4% |
+| `fn-dsa-512/keygen` | +5.6% |
 
 With the code unchanged between runs, shifts of this size come from the
 machine or from the harness, not from the crate. Read these rows as this
