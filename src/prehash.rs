@@ -139,6 +139,9 @@ impl PreHash {
 /// FIPS 205 §10.2.2). Callers must validate `ctx.len() <= `[`crate::MAX_CONTEXT_LEN`]
 /// (via the crate-private `check_ctx` helper) *before* calling this — it assumes that
 /// invariant already holds and truncates silently otherwise.
+// Called only by ML-DSA and SLH-DSA (FN-DSA frames its pre-hash differently); unused
+// without them.
+#[cfg_attr(not(any(feature = "ml-dsa", feature = "slh-dsa")), allow(dead_code))]
 pub(crate) fn frame_prehash(ctx: &[u8], hash: PreHash, digest: &[u8]) -> Vec<u8> {
     let oid = hash.oid_der();
     let mut out = Vec::with_capacity(2 + ctx.len() + oid.len() + digest.len());
@@ -157,6 +160,8 @@ pub(crate) fn frame_prehash(ctx: &[u8], hash: PreHash, digest: &[u8]) -> Vec<u8>
 /// or [`SigError::PreHashTooWeak`] if `hash.collision_strength_bits() < required_bits`.
 /// `algorithm` should be the human-readable algorithm name (e.g. `"ML-DSA-65"`) used in
 /// the error message.
+// Called only by the algorithm modules; unused in the encoding-only build.
+#[cfg_attr(not(any(feature = "ml-dsa", feature = "slh-dsa", feature = "fndsa")), allow(dead_code))]
 pub(crate) fn check_prehash(
     hash: PreHash,
     digest: &[u8],

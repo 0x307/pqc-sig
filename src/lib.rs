@@ -2,12 +2,12 @@
 //!
 //! A standalone, WASM-compatible library implementing post-quantum signature algorithms:
 //!
-//! - **ML-DSA** (NIST FIPS 204) — Primary standard, pure Rust, WASM-native
+//! - **ML-DSA** (NIST FIPS 204) — Primary standard, pure Rust, WASM-native. `ml-dsa` feature (default)
 //!   - [`fips204::MlDsa44Keypair`] — Security Level 2
 //!   - [`fips204::MlDsa65Keypair`] — Security Level 3 (recommended)
 //!   - [`fips204::MlDsa87Keypair`] — Security Level 5
 //!
-//! - **SLH-DSA** (NIST FIPS 205) — Stateless hash-based, pure Rust, WASM-native
+//! - **SLH-DSA** (NIST FIPS 205) — Stateless hash-based, pure Rust, WASM-native. `slh-dsa` feature (default)
 //!   - SHA2 variants: 128s/128f, 192s/192f, 256s/256f
 //!   - SHAKE variants: 128s/128f, 192s/192f, 256s/256f
 //!
@@ -130,11 +130,24 @@
 //! This crate is a pure library (rlib-only) and is never built as a standalone WASM
 //! artifact itself. For WASM/JS bindings, use the sibling `pqc-sig-wasm` crate.
 //!
+//! ## Encoding only
+//!
+//! With `default-features = false` and no algorithm feature, the crate is the encoding
+//! surface alone: [`SigAlgorithm`], [`SigPublicKey`], [`Signature`], [`SignedMessage`],
+//! multicodec codes, W3C Multikey, base64url and JSON. No signature implementation is
+//! compiled in, and CI checks the dependency graph to keep it that way. Use this when you
+//! only carry keys and signatures between systems, for example in a DID tool or an SDK
+//! whose signing happens elsewhere. The encodings are byte-identical to the full build's.
+//! ```toml
+//! pqc-sig = { version = "0.5", default-features = false, features = ["std"] }
+//! ```
+//!
 //! ## `no_std` Support
 //!
-//! This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
+//! This crate is `no_std`-compatible with `alloc`. Disable the `std` feature and keep the
+//! algorithms you use:
 //! ```toml
-//! pqc-sig = { version = "0.3", default-features = false }
+//! pqc-sig = { version = "0.5", default-features = false, features = ["ml-dsa", "slh-dsa"] }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -154,6 +167,9 @@ pub mod types;
 
 /// Domain-separation context helpers shared by `sign_ctx`/`verify_ctx` across all
 /// algorithm families. See the crate-level "Domain separation" docs above.
+// Its check is only called by the algorithm modules; the encoding-only build keeps the
+// public `MAX_CONTEXT_LEN` constant.
+#[cfg_attr(not(any(feature = "ml-dsa", feature = "slh-dsa", feature = "fndsa")), allow(dead_code))]
 mod ctx;
 
 /// Pre-hash signing support (`HashML-DSA`/`HashSLH-DSA`/FN-DSA pre-hashed mode) shared
@@ -161,10 +177,12 @@ mod ctx;
 /// families. See the crate-level "Pre-hash signing" docs above.
 pub mod prehash;
 
-/// ML-DSA (NIST FIPS 204) — pure Rust, WASM-native.
+/// ML-DSA (NIST FIPS 204) — pure Rust, WASM-native. Requires the `ml-dsa` feature (default).
+#[cfg(feature = "ml-dsa")]
 pub mod fips204;
 
-/// SLH-DSA (NIST FIPS 205) — pure Rust, WASM-native.
+/// SLH-DSA (NIST FIPS 205) — pure Rust, WASM-native. Requires the `slh-dsa` feature (default).
+#[cfg(feature = "slh-dsa")]
 pub mod fips205;
 
 /// FN-DSA / Falcon (NIST FIPS 206) — requires `fndsa` feature, pure Rust, WASM-compatible.
@@ -182,10 +200,12 @@ pub use types::{SigAlgorithm, SigPublicKey, SigSecretKey, Signature, SignedMessa
 pub use ctx::MAX_CONTEXT_LEN;
 pub use prehash::PreHash;
 
-// FIPS 204 — ML-DSA
+// FIPS 204 — ML-DSA (feature-gated, default)
+#[cfg(feature = "ml-dsa")]
 pub use fips204::{MlDsa44Keypair, MlDsa65Keypair, MlDsa87Keypair};
 
-// FIPS 205 — SLH-DSA
+// FIPS 205 — SLH-DSA (feature-gated, default)
+#[cfg(feature = "slh-dsa")]
 pub use fips205::{
     SlhDsaSha2_128sKeypair, SlhDsaSha2_128fKeypair,
     SlhDsaSha2_192sKeypair, SlhDsaSha2_192fKeypair,

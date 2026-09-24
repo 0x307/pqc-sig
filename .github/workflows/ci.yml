@@ -9,7 +9,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Seven independent jobs, run in parallel, each a genuine clean-room build:
+# Eight independent jobs, run in parallel, each a genuine clean-room build:
 # fresh checkout, fresh toolchain, no actions/cache. They cover:
 #   - working tree,      default features
 #   - working tree,      --all-features
@@ -18,10 +18,11 @@ concurrency:
 #   - working tree,      pinned MSRV toolchain (build only, both feature sets)
 #   - pqc-sig-wasm,       wasm32 cdylib artifact (CRA-3)
 #   - downstream-consumer-fixture, no_std/std-leak regression (CRA-3)
+#   - encoding only, no signature implementation in the graph (CRA-18)
 # Splitting these into parallel jobs (rather than one job running them all in
 # sequence) turns ~60 real minutes into whatever the slowest single job takes
 # (SLH-DSA's "s" parameter sets are the dominant cost in every job). Because
-# none of the seven `needs:` each other, the wall-clock duration GitHub reports
+# none of the eight `needs:` each other, the wall-clock duration GitHub reports
 # for the whole run (visible on the run's summary page / via the API) *is*
 # the critical path across them — that number is the "clone-to-green time"
 # for 0X3-31, not any single job's own elapsed time. Each job still logs its
@@ -281,10 +282,62 @@ jobs:
           END=$(date +%s)
           echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
 
+  encoding-only:
+    name: Encoding only (no signature implementation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record job start time
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Checkout (fresh clone)
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      # The encoding-only build must contain no signature implementation. The check
+      # runs against the default build first, where it must find ml-dsa, so a check
+      # that can never fail (a renamed crate, an empty tree) fails here instead.
+      - name: No signature implementation in the dependency graph
+        run: |
+          BACKENDS='^(ml-dsa|slh-dsa|fn-dsa|ed25519-dalek)$'
+          crates() { cargo tree -e normal --prefix none --format '{p}' "$@" | awk '{print $1}' | sort -u; }
+          if ! crates | grep -Eq "$BACKENDS"; then
+            echo "::error::Positive control failed: the default build's graph has no signature backend, so this check can't detect one"
+            exit 1
+          fi
+          FOUND=$(crates --no-default-features --features std | grep -E "$BACKENDS" || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::The encoding-only build pulls in a signature implementation:"
+            echo "$FOUND"
+            exit 1
+          fi
+          echo "Encoding-only graph:"
+          crates --no-default-features --features std
+
+      - name: Build (no_std, encoding only)
+        run: cargo build --no-default-features --verbose
+
+      - name: Test (encoding only)
+        # --tests: the doctests show signing, which this configuration can't compile.
+        # They run in every other job.
+        run: cargo test --no-default-features --features std --tests --verbose
+
+      - name: clippy (encoding only, -D warnings)
+        run: cargo clippy --no-default-features --features std --all-targets -- -D warnings
+
+      - name: Record job elapsed time
+        if: always()
+        run: |
+          END=$(date +%s)
+          echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
+
   clone-to-green:
     name: Record clone-to-green time
     runs-on: ubuntu-latest
-    needs: [default, all-features, packaged-default, packaged-all-features, msrv, wasm-cdylib-build, downstream-consumer]
+    needs: [default, all-features, packaged-default, packaged-all-features, msrv, wasm-cdylib-build, downstream-consumer, encoding-only]
     if: always()
     steps:
       - name: Report critical-path duration
@@ -293,7 +346,7 @@ jobs:
             echo "### Clone-to-green time"
             echo "This run's total wall-clock duration (visible on this workflow"
             echo "run's summary page, or via \`gh run view ${{ github.run_id }}\`)"
-            echo "is the clone-to-green time: the seven build/test jobs above run"
+            echo "is the clone-to-green time: the eight build/test jobs above run"
             echo "in parallel with no shared cache, so the run's total duration"
             echo "is their critical path, not a sum of job minutes."
           } | tee -a "$GITHUB_STEP_SUMMARY"

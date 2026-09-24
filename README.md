@@ -138,6 +138,18 @@ callout above).
 matters — which is the common case, hence ML-DSA-65 remaining this crate's
 [`PRIMARY_ALGORITHM`](src/lib.rs).
 
+## What's new in 0.5.0: encoding without the algorithms
+
+ML-DSA and SLH-DSA are now features, `ml-dsa` and `slh-dsa`, both on by default. With
+`default-features = false` and neither enabled, `pqc-sig` is just the key and signature
+types and their encodings: multicodec codes, W3C Multikey, base64url and JSON. No
+signature implementation is compiled in. See [Encoding only](#encoding-only).
+
+This is a breaking change for one kind of consumer: if you use `default-features = false`,
+add the algorithms you use, e.g. `features = ["ml-dsa", "slh-dsa"]`. Default-feature users
+see no change, and every encoding is byte-identical to 0.4.2
+([`tests/encoding_vectors.rs`](tests/encoding_vectors.rs)).
+
 ## What's new in 0.4.0 — Domain separation & pre-hash
 
 Every algorithm family (ML-DSA, SLH-DSA, and — behind `fndsa` — FN-DSA) now exposes a
@@ -241,7 +253,7 @@ features. The default build has zero `unsafe` in its entire dependency tree.
 a fresh GitHub-hosted runner with no dependency or build caching — every run is a genuine
 clean-room build.
 
-Seven jobs:
+Eight jobs:
 
 - **Default features (build + test)** — `cargo build` / `cargo test` with default features.
   The crate's supported surface; must always pass.
@@ -265,6 +277,12 @@ Seven jobs:
   dependency that leaks real `std` via `wasm-bindgen` on `wasm32` regardless of `pqc-sig`'s
   own `no_std`-ness. A second build of `pqc-sig` alone proves nothing here — only a
   consumer's build graph exposes this class of regression.
+- **Encoding only (no signature implementation)** — builds with
+  `--no-default-features --features std` and fails if `ml-dsa`, `slh-dsa`, `fn-dsa` or
+  `ed25519-dalek` appears in the dependency graph. The same check runs against the default
+  build first and must find `ml-dsa` there, so a check that can't fail doesn't pass
+  silently. Then runs the encoding tests, including the 0.4.2 byte-identity vectors, and
+  clippy with warnings denied, in that configuration.
 
 ## Dependency scanning
 
@@ -285,7 +303,7 @@ list, and not papered over with `continue-on-error`.
 
 ```toml
 [dependencies]
-pqc-sig = "0.4"
+pqc-sig = "0.5"
 ```
 
 ```rust,no_run
@@ -367,7 +385,7 @@ deployments to PQC during migration: `HybridSigner` produces both signatures, an
 verification requires both to pass — an attacker must break both primitives to forge one.
 
 ```toml
-pqc-sig = { version = "0.4", features = ["hybrid"] }
+pqc-sig = { version = "0.5", features = ["hybrid"] }
 ```
 
 ```rust,ignore
@@ -431,12 +449,27 @@ import { mlDsa, slhDsa } from './dist-jco/pqc_sig.js';
 
 The WIT interface is at [`wit/pqc-sig.wit`](wit/pqc-sig.wit) and is also included in the WASM release artifact (`dist/pqc-sig.wit`, produced by [`build.ps1`](build.ps1); historically shipped as `pqc-sig-v0.1.0-wasm.zip` in the v0.1.0 release — see the [Release](#release) table).
 
-## `no_std` Support
+## Encoding only
 
-This crate is `no_std`-compatible with `alloc`. Disable the `std` feature:
+For code that carries keys and signatures but never signs or verifies (a DID tool, a
+resolver, an SDK whose signing happens elsewhere), turn the algorithms off:
 
 ```toml
-pqc-sig = { version = "0.4", default-features = false }
+pqc-sig = { version = "0.5", default-features = false, features = ["std"] }
+```
+
+You get `SigAlgorithm`, `SigPublicKey`, `Signature`, `SignedMessage`, multicodec codes,
+W3C Multikey (`to_multibase`/`from_multibase`), base64url and JSON, with no signature
+implementation in your dependency graph. CI enforces that. The encodings are
+byte-identical to the full build's.
+
+## `no_std` Support
+
+This crate is `no_std`-compatible with `alloc`. Disable the `std` feature and keep the
+algorithms you use:
+
+```toml
+pqc-sig = { version = "0.5", default-features = false, features = ["ml-dsa", "slh-dsa"] }
 ```
 
 ## Features
@@ -444,8 +477,10 @@ pqc-sig = { version = "0.4", default-features = false }
 | Feature | Description |
 |---------|-------------|
 | `std` (default) | Enable `std`-dependent trait impls |
+| `ml-dsa` (default) | ML-DSA-44/65/87 (FIPS 204) keypairs, signing and verification |
+| `slh-dsa` (default) | The twelve SLH-DSA parameter sets (FIPS 205) |
 | `fndsa` | Enable FN-DSA/Falcon (pure Rust, WASM-compatible) |
-| `hybrid` | Enable the Ed25519 + ML-DSA-65 hybrid combiner (pure Rust, WASM-compatible) |
+| `hybrid` | Enable the Ed25519 + ML-DSA-65 hybrid combiner (pure Rust, WASM-compatible). Implies `ml-dsa` |
 
 ## Algorithm Selection Guide
 

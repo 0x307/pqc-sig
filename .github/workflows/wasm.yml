@@ -52,8 +52,11 @@ jobs:
       - name: cargo build --target wasm32-unknown-unknown --no-default-features
         run: cargo build --target wasm32-unknown-unknown --no-default-features --verbose
 
-      - name: cargo build --target wasm32-unknown-unknown --no-default-features --features fndsa,hybrid
-        run: cargo build --target wasm32-unknown-unknown --no-default-features --features fndsa,hybrid --verbose
+      - name: cargo build --target wasm32-unknown-unknown --no-default-features --features ml-dsa,slh-dsa
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --features ml-dsa,slh-dsa --verbose
+
+      - name: cargo build --target wasm32-unknown-unknown --no-default-features --features ml-dsa,slh-dsa,fndsa,hybrid
+        run: cargo build --target wasm32-unknown-unknown --no-default-features --features ml-dsa,slh-dsa,fndsa,hybrid --verbose
 
       - name: Record job elapsed time
         if: always()
