@@ -30,7 +30,8 @@ name       = "pqc_sig"
 crate-type = ["cdylib"]
 
 [dependencies]
-pqc-sig = { path = "..", default-features = false }
+# The bindings expose ML-DSA and SLH-DSA, which are features since pqc-sig 0.5.0.
+pqc-sig = { path = "..", default-features = false, features = ["ml-dsa", "slh-dsa"] }
 
 # `default-features = false`: wasm-bindgen's default `std` feature would
 # link real `std` into this artifact, colliding with the `#[panic_handler]`/

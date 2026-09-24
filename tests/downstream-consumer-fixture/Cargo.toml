@@ -41,7 +41,9 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-pqc-sig = { path = "../..", default-features = false }
+# The algorithms are features since 0.5.0; keep them, so the fixture still links the code
+# whose no_std build it guards.
+pqc-sig = { path = "../..", default-features = false, features = ["ml-dsa", "slh-dsa"] }
 getrandom = { version = "0.2", features = ["js"] }
 
 [workspace]

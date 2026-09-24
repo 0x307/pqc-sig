@@ -1,5 +1,16 @@
 # pqc-sig Release Notes
 
+## v0.5.0 (2026-09-24)
+
+ML-DSA and SLH-DSA are now features, `ml-dsa` and `slh-dsa`, both on by default. With
+`default-features = false`, pqc-sig is the key and signature types and their encodings
+(Multikey, base64url, JSON) with no signature implementation compiled in, for code that
+carries keys and signatures without signing them. CI checks the dependency graph.
+
+**Migration:** only if you use `default-features = false`. Add the algorithms you use:
+`features = ["ml-dsa", "slh-dsa"]`. Default-feature users see no change, and every wire
+encoding is byte-identical to 0.4.2 (`tests/encoding_vectors.rs`). See `CHANGELOG.md`.
+
 ## v0.4.1 (2026-09-23)
 
 Adds `BENCHMARKS.md`: measured cost of every operation the crate offers, on a

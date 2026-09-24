@@ -1,6 +1,6 @@
 [package]
 name        = "pqc-sig"
-version     = "0.4.2"
+version     = "0.5.0"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
@@ -24,17 +24,19 @@ crate-type = ["rlib"]
 # ── Core PQC — Pure Rust, no_std capable, WASM-compatible ────────────────────
 
 [dependencies]
-# FIPS 204 — ML-DSA (pure Rust, no_std compatible, WASM-native)
-ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc", "rand_core"] }
+# FIPS 204 — ML-DSA (pure Rust, no_std compatible, WASM-native). Behind the `ml-dsa`
+# feature, on by default.
+ml-dsa = { version = "0.1.1", default-features = false, features = ["alloc", "rand_core"], optional = true }
 
-# FIPS 205 — SLH-DSA (pure Rust, no_std compatible, WASM-native)
+# FIPS 205 — SLH-DSA (pure Rust, no_std compatible, WASM-native). Behind the `slh-dsa`
+# feature, on by default.
 # Note: slh-dsa 0.2.0-rc.5 requires alloc features on its pkcs8/der/spki deps
-slh-dsa = { version = "0.2.0-rc.5", default-features = false, features = ["alloc"] }
+slh-dsa = { version = "0.2.0-rc.5", default-features = false, features = ["alloc"], optional = true }
 
-# slh-dsa's pkcs8/der/spki deps need alloc enabled explicitly
-pkcs8 = { version = "0.11", default-features = false, features = ["alloc"] }
-der  = { version = "0.8", default-features = false, features = ["alloc"] }
-spki = { version = "0.8", default-features = false, features = ["alloc"] }
+# slh-dsa's pkcs8/der/spki deps need alloc enabled explicitly. Only needed with slh-dsa.
+pkcs8 = { version = "0.11", default-features = false, features = ["alloc"], optional = true }
+der  = { version = "0.8", default-features = false, features = ["alloc"], optional = true }
+spki = { version = "0.8", default-features = false, features = ["alloc"], optional = true }
 
 # FIPS 206 — FN-DSA / Falcon (pure Rust, no_std + alloc, WASM-compatible, feature-gated)
 fn-dsa = { version = "0.4", optional = true }
@@ -66,7 +68,17 @@ subtle = { version = "2", default-features = false }
 thiserror = { version = "2", default-features = false }
 
 [features]
-default = ["std"]
+# The signature algorithms are on by default. `default-features = false` gives the
+# encoding surface alone: the key and signature types, algorithm identifiers, Multikey,
+# base64url and JSON, with no signature implementation compiled in. CI asserts that
+# build's dependency graph contains none (the `encoding-only` job).
+default = ["std", "ml-dsa", "slh-dsa"]
+
+# ml-dsa: ML-DSA-44/65/87 (FIPS 204) keypairs, signing and verification.
+ml-dsa = ["dep:ml-dsa"]
+
+# slh-dsa: the twelve SLH-DSA parameter sets (FIPS 205).
+slh-dsa = ["dep:slh-dsa", "dep:pkcs8", "dep:der", "dep:spki"]
 
 # std: enables std-dependent trait impls
 std = [
@@ -78,8 +90,9 @@ std = [
 # fndsa: FN-DSA / Falcon via fn-dsa (pure Rust, WASM-compatible)
 fndsa = ["dep:fn-dsa"]
 
-# hybrid: Ed25519 + ML-DSA-65 combiner via ed25519-dalek (pure Rust, WASM-compatible)
-hybrid = ["dep:ed25519-dalek"]
+# hybrid: Ed25519 + ML-DSA-65 combiner via ed25519-dalek (pure Rust, WASM-compatible).
+# Implies ml-dsa, which it is built on.
+hybrid = ["ml-dsa", "dep:ed25519-dalek"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -91,6 +104,36 @@ all-features = true
 [[example]]
 name = "hybrid_bridge"
 required-features = ["hybrid"]
+
+# The other examples and the backend test suites need the algorithms they exercise, so
+# `cargo test --no-default-features` builds only what the encoding-only surface can run.
+[[example]]
+name = "domain_separation"
+required-features = ["ml-dsa"]
+
+[[example]]
+name = "gen_kat_vectors"
+required-features = ["ml-dsa", "slh-dsa"]
+
+[[example]]
+name = "prehash_large_payload"
+required-features = ["ml-dsa"]
+
+[[test]]
+name = "ml_dsa_tests"
+required-features = ["ml-dsa"]
+
+[[test]]
+name = "slh_dsa_tests"
+required-features = ["slh-dsa"]
+
+[[test]]
+name = "kat_tests"
+required-features = ["ml-dsa", "slh-dsa"]
+
+[[test]]
+name = "fn_dsa_tests"
+required-features = ["fndsa"]
 
 [dev-dependencies]
 rand    = { version = "0.8", features = ["std"] }
@@ -121,6 +164,7 @@ criterion = { version = "0.5", default-features = false, features = ["cargo_benc
 [[bench]]
 name = "signatures"
 harness = false
+required-features = ["ml-dsa", "slh-dsa"]
 
 # Benchmarks measure speed, so they must not inherit the release profile's
 # `opt-level = "z"`. That setting is correct for what this crate ships — a
