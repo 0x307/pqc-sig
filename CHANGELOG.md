@@ -7,7 +7,7 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
-## [0.5.0] - Unreleased
+## [0.5.0] - 2026-09-24
 
 **Breaking for `default-features = false` consumers only.** ML-DSA and SLH-DSA move behind
 features, so the key and signature encodings can be used without any signature

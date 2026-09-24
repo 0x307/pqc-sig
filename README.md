@@ -188,7 +188,8 @@ let sig = signer.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.4.0** | 2026-09-09 | [crates.io](https://crates.io/crates/pqc-sig/0.4.0) |
+| **v0.5.0** | 2026-09-24 | [crates.io](https://crates.io/crates/pqc-sig/0.5.0) |
+| v0.4.0 | 2026-09-09 | [crates.io](https://crates.io/crates/pqc-sig/0.4.0) |
 | v0.3.0 | 2026-09-02 | [crates.io](https://crates.io/crates/pqc-sig/0.3.0) |
 | v0.2.1 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.1) |
 | v0.2.0 | 2026-09-01 | [crates.io](https://crates.io/crates/pqc-sig/0.2.0) |
