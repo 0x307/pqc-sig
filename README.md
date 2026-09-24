@@ -1,5 +1,7 @@
 # pqc-sig
 
+> **Tier:** Production · **MSRV:** 1.85 · **License:** MIT OR Apache-2.0 · Not independently audited, see [the crate family](#the-0x307-crate-family)
+
 **Post-quantum digital signatures** — a standalone, WASM-compatible Rust library implementing NIST-standardized post-quantum signature algorithms.
 
 [![CI](https://github.com/0x307/pqc-sig/actions/workflows/ci.yml/badge.svg)](https://github.com/0x307/pqc-sig/actions/workflows/ci.yml)
@@ -521,3 +523,28 @@ MIT OR Apache-2.0 — see [`LICENSE-MIT`](./LICENSE-MIT) and [`LICENSE-APACHE`](
 ## Maintainer
 
 Ed Johnson
+
+---
+
+## The 0x307 crate family
+
+`pqc-sig` is one of six open-source crates from [0x307](https://0x307.com/crates), held to one
+audit and stability standard.
+
+| Crate | Tier | What it does |
+|---|---|---|
+| [pqc-sig](https://crates.io/crates/pqc-sig) (this crate) | Production | ML-DSA, SLH-DSA and FN-DSA signatures (FIPS 204/205/206) |
+| [pqc-kem](https://crates.io/crates/pqc-kem) | Production | ML-KEM (FIPS 203), the X25519 + ML-KEM-768 hybrid, X-Wing, and sealed boxes |
+| [aethel-core](https://crates.io/crates/aethel-core) | Production | Post-quantum anonymous identity: a separate identifier per context, context-bound ML-DSA signing |
+| [aethel-sdk](https://crates.io/crates/aethel-sdk) | Preview | The SDK over aethel-core, and the place to start |
+| [aethel-vault](https://crates.io/crates/aethel-vault) | Preview | Agent-held wallet: policy-gated x402 / EIP-3009 signing with ML-DSA-65 spend records |
+| [pqc-privacy](https://crates.io/crates/pqc-privacy) | Lab | Research bundle, kept off every identity and payment path |
+
+**Production** crates are thin, standards-bound libraries meant to be depended on today. **Preview** crates work and are published, with APIs still settling. **Lab** crates are research, never on an identity or payment path.
+
+**Runnable examples:** [0x307/examples](https://github.com/0x307/examples), one program per
+crate, pinned to the published versions.
+
+**Audit status:** None of these crates has been independently audited, and none holds a CMVP / FIPS 140-3 validation. "FIPS 203/204/205/206" means the algorithms follow those standards, not that the code is certified. Known issues for this crate are in
+[SECURITY.md](https://github.com/0x307/pqc-sig/blob/main/SECURITY.md). Versioning and yanks:
+[STABILITY.md](https://github.com/0x307/pqc-sig/blob/main/STABILITY.md).

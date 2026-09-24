@@ -1,12 +1,14 @@
 [package]
 name        = "pqc-sig"
-version     = "0.4.1"
+version     = "0.4.2"
 edition     = "2021"
 rust-version = "1.85"
 authors     = ["Kenneth Harper"]
 description = "Post-quantum digital signatures: ML-DSA (FIPS 204), SLH-DSA (FIPS 205), FN-DSA (FIPS 206) — standalone WASM-compatible"
 license     = "MIT OR Apache-2.0"
 repository  = "https://github.com/0x307/pqc-sig"
+homepage = "https://0x307.com/crates"
+documentation = "https://docs.rs/pqc-sig"
 keywords    = ["post-quantum", "signatures", "ml-dsa", "slh-dsa", "wasm"]
 categories  = ["cryptography", "wasm", "no-std"]
 
