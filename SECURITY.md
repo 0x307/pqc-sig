@@ -17,8 +17,10 @@ the one committed number in that posture; everything else is best-effort.
 
 ## Supported versions
 
-This project ships `0.x`. Security fixes land on the latest published minor version. Older
-`0.x` minors are not backported to, consistent with the stated stability policy.
+Security fixes land on the current line and on any legacy line still inside its 6-month
+window. No version is ever yanked, including for a security bug: we fix forward and file a
+RustSec advisory. The support table is in
+[`STABILITY.md`](./STABILITY.md#support-table-for-pqc-sig).
 
 ## Dependency scanning
 

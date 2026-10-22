@@ -7,6 +7,20 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [Unreleased]
+
+Documentation only. No change to the API, the wire formats or behaviour.
+
+- **Version policy.** [`STABILITY.md`](./STABILITY.md#6-versions-and-support-windows) now
+  says that no version is ever yanked, including for security bugs. Fixes ship forward with
+  a RustSec advisory. A legacy line gets security patches for 6 months after its successor
+  ships, then is marked unsupported but stays downloadable. This replaces the old rule on
+  when a version is yanked.
+- **Support table.** 0.5.x is current. 0.4.x (0.4.2) gets security patches until
+  2027-05-31. Versions yanked before 2026-10-22 are not covered.
+- **0.4 to 0.5 migration note** in `STABILITY.md`, taken from the 0.5.0 entry below.
+- `SECURITY.md` and the README point to the support table.
+
 ## [0.5.0] - 2026-09-24
 
 **Breaking for `default-features = false` consumers only.** ML-DSA and SLH-DSA move behind

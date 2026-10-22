@@ -538,7 +538,9 @@ for the authoritative Keep-a-Changelog-format record.
 ## Stability and support
 
 This project ships `0.x`. See [`STABILITY.md`](./STABILITY.md) for what counts as a breaking
-change, deprecation notice, release cadence, and support posture.
+change, deprecation notice, release cadence, and support posture. It also has the
+[support table](./STABILITY.md#support-table-for-pqc-sig): 0.5.x is current, and 0.4.x gets
+security patches until 2027-05-31. No version is ever yanked.
 
 ## Security
 
@@ -582,5 +584,5 @@ audit and stability standard.
 crate, pinned to the published versions.
 
 **Audit status:** None of these crates has been independently audited, and none holds a CMVP / FIPS 140-3 validation. "FIPS 203/204/205/206" means the algorithms follow those standards, not that the code is certified. Known issues for this crate are in
-[SECURITY.md](https://github.com/0x307/pqc-sig/blob/main/SECURITY.md). Versioning and yanks:
+[SECURITY.md](https://github.com/0x307/pqc-sig/blob/main/SECURITY.md). Versioning and support:
 [STABILITY.md](https://github.com/0x307/pqc-sig/blob/main/STABILITY.md).
