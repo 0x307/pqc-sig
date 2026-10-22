@@ -220,6 +220,17 @@ jobs:
       # needs. Some of this crate's dev-only interop-test dependencies
       # (pulled only for `cargo test`) require a newer toolchain than 1.85;
       # that's fine and expected, since consumers never see dev-dependencies.
+      #
+      # No Cargo.lock is committed, so a plain resolve takes the newest
+      # semver-compatible versions, and some of those (sha2 0.11.1, ctutils
+      # 0.4.3, via slh-dsa) need a newer rustc than 1.85. The question this job
+      # answers is whether a 1.85-compatible set exists and builds, so it
+      # resolves with Cargo's MSRV-aware fallback (stable since 1.84).
+      - name: Resolve Rust 1.85-compatible versions
+        env:
+          CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+        run: cargo generate-lockfile
+
       - name: Build (default features)
         run: cargo build --verbose
 
