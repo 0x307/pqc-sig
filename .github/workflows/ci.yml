@@ -196,7 +196,7 @@ jobs:
           echo "Job elapsed: $((END - JOB_START))s" | tee -a "$GITHUB_STEP_SUMMARY"
 
   msrv:
-    name: Build (MSRV, Rust 1.85)
+    name: Build (MSRV, Rust 1.87)
     runs-on: ubuntu-latest
     steps:
       - name: Record job start time
@@ -205,8 +205,8 @@ jobs:
       - name: Checkout (fresh clone)
         uses: actions/checkout@v4
 
-      - name: Install pinned Rust 1.85.0 toolchain
-        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Install pinned Rust 1.87.0 toolchain
+        uses: dtolnay/rust-toolchain@1.87.0
 
       - name: Toolchain versions
         run: |
@@ -216,17 +216,18 @@ jobs:
 
       # `rust-version` is a promise to library consumers, who never pull in
       # dev-dependencies — so this job builds (does not test) both feature
-      # sets, matching what `cargo build`/`cargo check` on 1.85 actually
+      # sets, matching what `cargo build`/`cargo check` on 1.87 actually
       # needs. Some of this crate's dev-only interop-test dependencies
-      # (pulled only for `cargo test`) require a newer toolchain than 1.85;
+      # (pulled only for `cargo test`) require a newer toolchain than 1.87;
       # that's fine and expected, since consumers never see dev-dependencies.
       #
       # No Cargo.lock is committed, so a plain resolve takes the newest
-      # semver-compatible versions, and some of those (sha2 0.11.1, ctutils
-      # 0.4.3, via slh-dsa) need a newer rustc than 1.85. The question this job
-      # answers is whether a 1.85-compatible set exists and builds, so it
-      # resolves with Cargo's MSRV-aware fallback (stable since 1.84).
-      - name: Resolve Rust 1.85-compatible versions
+      # semver-compatible versions, and one of those (sha2 0.11.1, via slh-dsa)
+      # needs rustc 1.88. The question this job answers is whether a
+      # 1.87-compatible set exists and builds, so it resolves with Cargo's
+      # MSRV-aware fallback (stable since 1.84). The ctutils >= 0.4.4 floor in
+      # Cargo.toml keeps the fallback off versions with RUSTSEC-2026-0385.
+      - name: Resolve Rust 1.87-compatible versions
         env:
           CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
         run: cargo generate-lockfile

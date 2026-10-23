@@ -9,7 +9,36 @@ document for what counts as breaking inside `0.x`.
 
 ## [0.5.1] - 2026-10-23
 
-Documentation and CI only. No change to the API, the wire formats or behaviour.
+**Security, and an MSRV raise from Rust 1.85 to 1.87.** No change to the API, the wire
+formats or behaviour.
+
+### Security
+
+- **`ctutils` floor for RUSTSEC-2026-0385.** `ml-dsa` and `slh-dsa` reach `ctutils`
+  through `hybrid-array` and `digest`. Every `ctutils` before 0.4.4 has
+  [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html): its
+  constant-time mask generation and `u128` comparisons could compile to branches on secret
+  values. pqc-sig now names `ctutils = "0.4.4"` as a direct, optional dependency, enabled by
+  `ml-dsa` and `slh-dsa`. It is a version floor only. No resolver, including the MSRV-aware
+  fallback, can now choose an affected version. The encoding-only build does not pull
+  `ctutils` in, before or after.
+- The committed lockfiles for `pqc-sig-wasm` and the downstream-consumer fixture move from
+  `ctutils` 0.4.2 to 0.4.5.
+
+### Changed
+
+- **MSRV is now Rust 1.87** (`rust-version = "1.87"`, also in `pqc-sig-wasm`). `ctutils`
+  0.4.4 and 0.4.5, the fixed releases, need Rust 1.87. The newest `ctutils` that builds on
+  1.85 is 0.4.2, which is affected, so 1.85 and 1.86 are no longer supported.
+  **Migration:** build with Rust 1.87 or later. On 1.87 with default features, a plain
+  resolve picks `sha2` 0.11.1, which needs 1.88. Resolve with
+  `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or set `resolver = "3"` and Cargo
+  picks `sha2` 0.11.0, which has no advisory. An ML-DSA-only build does not use `sha2`. The
+  README's Build Requirements section has the details.
+- The `msrv` CI job builds with Rust 1.87.0. It resolves with the MSRV-aware fallback
+  first, so it proves that a 1.87-compatible dependency set exists and builds.
+
+### Documentation
 
 - **Version policy.** [`STABILITY.md`](./STABILITY.md#6-versions-and-support-windows) now
   says that no version is ever yanked, including for security bugs. Fixes ship forward with
@@ -20,12 +49,6 @@ Documentation and CI only. No change to the API, the wire formats or behaviour.
   2027-05-31. Versions yanked before 2026-10-22 are not covered.
 - **0.4 to 0.5 migration note** in `STABILITY.md`, taken from the 0.5.0 entry below.
 - `SECURITY.md` and the README point to the support table.
-- **Rust 1.85 note in the README.** A plain resolve on Rust 1.85 now picks `sha2` 0.11.1
-  (needs 1.88) and `ctutils` releases that need 1.87. The README's Build Requirements
-  section says how to get a 1.85-compatible build: resolve with
-  `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`, or set `resolver = "3"`. It also now
-  says what the `msrv` CI job proves: that a 1.85-compatible dependency set exists and
-  builds. The job resolves that set with the same fallback. `rust-version` is still 1.85.
 
 ## [0.5.0] - 2026-09-24
 

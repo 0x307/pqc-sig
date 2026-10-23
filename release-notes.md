@@ -2,14 +2,20 @@
 
 ## v0.5.1 (2026-10-23)
 
-Documentation and CI only. No change to the API, the wire formats or behaviour, so there
-is nothing to migrate.
+**Security fix and MSRV raise.** pqc-sig now requires `ctutils` 0.4.4 or later, which
+fixes [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html)
+(non-constant-time mask generation and `u128` comparisons). `ctutils` reaches pqc-sig
+through `ml-dsa` and `slh-dsa`. The fixed releases need Rust 1.87, so the MSRV moves from
+1.85 to 1.87. No change to the API, the wire formats or behaviour.
+
+**Migration:** build with Rust 1.87 or later. On 1.87 with default features, resolve with
+`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or set `resolver = "3"`, because the
+newest `sha2` needs 1.88. See the README's Build Requirements section.
 
 `STABILITY.md` now has the version policy. No version is ever yanked, including for
 security bugs: fixes ship forward with a RustSec advisory. A legacy line gets security
 patches for 6 months after its successor ships. 0.5.x is current, and 0.4.x gets security
-patches until 2027-05-31. The README's Build Requirements section says how to get a build
-on Rust 1.85 to 1.87. See `CHANGELOG.md`.
+patches until 2027-05-31. See `CHANGELOG.md`.
 
 ## v0.5.0 (2026-09-24)
 
