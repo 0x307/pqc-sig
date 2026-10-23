@@ -7,6 +7,45 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [0.4.3] - 2026-10-23
+
+**Security, and an MSRV raise from Rust 1.85 to 1.87.** A patch on the legacy 0.4 line. No
+change to the API, the wire formats or behaviour.
+
+### Security
+
+- **`ctutils` floor for RUSTSEC-2026-0385.** `ml-dsa` and `slh-dsa` reach `ctutils`
+  through `hybrid-array` and `digest`, and `ml-dsa` also depends on it directly. Every
+  `ctutils` before 0.4.4 has
+  [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html): its
+  constant-time mask generation and `u128` comparisons could compile to branches on secret
+  values. pqc-sig now names `ctutils = "0.4.4"` as a direct dependency. It is a version
+  floor only. No resolver, including the MSRV-aware fallback, can now choose an affected
+  version. On the 0.4 line `ml-dsa` and `slh-dsa` are always built, so every build already
+  had `ctutils`. The floor adds no new crate and no new feature.
+- The committed lockfiles for `pqc-sig-wasm` and the downstream-consumer fixture move from
+  `ctutils` 0.4.2 to 0.4.5.
+- No version was yanked. 0.4.2 and the earlier 0.4 releases stay on crates.io. `cargo audit`
+  and `cargo deny` flag the affected `ctutils` in their builds.
+
+### Changed
+
+- **MSRV is now Rust 1.87** (`rust-version = "1.87"`, also in `pqc-sig-wasm`). `ctutils`
+  0.4.4 and 0.4.5, the fixed releases, need Rust 1.87. The newest `ctutils` that builds on
+  1.85 is 0.4.2, which is affected, so 1.85 and 1.86 are no longer supported. An MSRV raise
+  is normally breaking. This one ships in a patch release under the new security exception
+  in [`STABILITY.md`](./STABILITY.md#2-what-counts-as-a-breaking-change).
+  **Migration:** build with Rust 1.87 or later. On 1.87 a plain resolve picks `sha2`
+  0.11.1, which needs 1.88. Resolve with `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`
+  or set `resolver = "3"` and Cargo picks `sha2` 0.11.0, which has no advisory. The README's
+  Build Requirements section has the details. Code that builds against 0.4.2 builds against
+  0.4.3 unchanged.
+- `STABILITY.md` now says that no version is ever yanked, including for security bugs, and
+  that 0.4.x gets security patches until 2027-05-31. This replaces the 0.4.2 rule that a
+  version with a security defect is yanked.
+- The `msrv` CI job on the 0.4 line still pins Rust 1.85.0 and was not changed. The 0.4.3
+  build on Rust 1.87.0 was checked by hand.
+
 ## [0.4.2] - 2026-09-23
 
 Documentation and metadata only. No change to the API, the wire formats or behaviour.

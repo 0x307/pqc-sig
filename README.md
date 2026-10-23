@@ -1,6 +1,6 @@
 # pqc-sig
 
-> **Tier:** Production · **MSRV:** 1.85 · **License:** MIT OR Apache-2.0 · Not independently audited, see [the crate family](#the-0x307-crate-family)
+> **Tier:** Production · **MSRV:** 1.87 · **License:** MIT OR Apache-2.0 · Not independently audited, see [the crate family](#the-0x307-crate-family)
 
 **Post-quantum digital signatures** — a standalone, WASM-compatible Rust library implementing NIST-standardized post-quantum signature algorithms.
 
@@ -9,7 +9,7 @@
 [![cargo-deny](https://github.com/0x307/pqc-sig/actions/workflows/cargo-deny.yml/badge.svg)](https://github.com/0x307/pqc-sig/actions/workflows/cargo-deny.yml)
 [![crates.io](https://img.shields.io/crates/v/pqc-sig.svg)](https://crates.io/crates/pqc-sig)
 [![docs.rs](https://docs.rs/pqc-sig/badge.svg)](https://docs.rs/pqc-sig)
-[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](#build-requirements)
+[![MSRV](https://img.shields.io/badge/MSRV-1.87-blue.svg)](#build-requirements)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![FIPS 204](https://img.shields.io/badge/FIPS-204%20ML--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/204/final)
 [![FIPS 205](https://img.shields.io/badge/FIPS-205%20SLH--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/205/final)
@@ -211,15 +211,38 @@ let sig = signer.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
 
 ## Build Requirements
 
-- **Rust 1.85 or later** (edition 2021) — this is the crate's declared `rust-version`
-  (MSRV), enforced by the `msrv` job in [`ci.yml`](.github/workflows/ci.yml), which builds
-  the working tree with a pinned Rust 1.85.0 toolchain on every push/PR. The MSRV is driven
-  by a transitive dependency in the default build (a `block-buffer` version pulled in via
-  `slh-dsa`'s hashing chain requires the `edition2024` Cargo feature, stabilized in Rust
-  1.85.0) — not by this crate's own code. No nightly features are used. The MSRV promise
-  covers `cargo build`/`cargo check` only, not `cargo test`: a couple of this crate's
-  dev-only interop-test dependencies need a newer toolchain, but dev-dependencies are never
-  pulled in by downstream consumers.
+- **Rust 1.87 or later** (edition 2021). This is the crate's declared `rust-version` (MSRV).
+  The MSRV is set by a dependency, not by this crate's own code: `ctutils` 0.4.4, the first
+  release without RUSTSEC-2026-0385, needs Rust 1.87. No nightly features are used. The
+  MSRV promise covers `cargo build`/`cargo check` only, not `cargo test`. A couple of this
+  crate's dev-only interop-test dependencies need a newer toolchain, but dev-dependencies
+  are never pulled in by downstream consumers.
+
+> **Why not Rust 1.85 or 1.86 any more?** Before 0.4.3 the MSRV was 1.85. `ml-dsa` and
+> `slh-dsa` both depend on `ctutils`, and
+> [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html) (2026-10-23)
+> covers every `ctutils` before 0.4.4. Its constant-time helpers could compile to branches
+> on secret values, which can leak those values through timing. The fixed releases, 0.4.4
+> and 0.4.5, need Rust 1.87. The newest `ctutils` that builds on 1.85 is 0.4.2, which is
+> affected. So a 1.85 or 1.86 build can only be made with an affected `ctutils`. pqc-sig now
+> requires `ctutils` 0.4.4 or later, so no resolver can choose an affected version.
+>
+> **On Rust 1.87?** No `Cargo.lock` ships with a library, so Cargo picks the newest
+> compatible versions. That includes `sha2` 0.11.1, via `slh-dsa`, which needs Rust 1.88. A
+> plain `cargo build` on 1.87 then fails with "rustc 1.87.0 is not supported by the
+> following package". Either of these gives you a 1.87 build:
+>
+> 1. Resolve with the MSRV-aware fallback, once, before you build:
+>
+>    ```sh
+>    CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo generate-lockfile
+>    ```
+>
+> 2. Set `resolver = "3"` in your workspace or package `Cargo.toml`. Resolver 3 uses the
+>    fallback by default.
+>
+> Either way Cargo picks `sha2` 0.11.0 and `ctutils` 0.4.5. Both are safe: `sha2` 0.11.0
+> has no RustSec advisory, and the `ctutils` floor keeps the fallback on a fixed release.
 - No C compiler, credentials, network services, or local files outside the repo are needed
   to build or test this crate — every optional feature (`fndsa`, `hybrid`) is pure Rust.
 
@@ -252,9 +275,10 @@ Seven jobs:
   published crate.
 - **Packaged artifact (`--all-features`)** — same, with every optional feature enabled.
 - **MSRV (Rust 1.85.0, build)** — builds (not tests — see
-  [Build Requirements](#build-requirements)) against the pinned MSRV toolchain, not `stable`.
-  Fails the moment any code or dependency bump relies on a newer language feature than the
-  declared `rust-version`.
+  [Build Requirements](#build-requirements)) against a pinned toolchain, not `stable`. On
+  the 0.4 line this job still pins Rust 1.85.0, the MSRV before 0.4.3. It was not moved to
+  1.87, so it no longer matches `rust-version`. The 0.4.3 build on Rust 1.87.0 was checked
+  by hand before release.
 - **`pqc-sig-wasm` (wasm32 cdylib artifact)** — builds the real standalone WASM artifact,
   `cargo build --target wasm32-unknown-unknown --no-default-features` in `pqc-sig-wasm/`.
   This is the job that would have caught the crate-split defect this repo used to have —

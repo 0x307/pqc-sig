@@ -1,5 +1,20 @@
 # pqc-sig Release Notes
 
+## v0.4.3 (2026-10-23)
+
+**Security fix and MSRV raise on the legacy 0.4 line.** pqc-sig now requires `ctutils`
+0.4.4 or later, which fixes
+[RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html)
+(non-constant-time mask generation and `u128` comparisons). `ctutils` reaches pqc-sig
+through `ml-dsa` and `slh-dsa`. The fixed releases need Rust 1.87, so the MSRV moves from
+1.85 to 1.87. No change to the API, the wire formats or behaviour.
+
+**Migration:** build with Rust 1.87 or later. On 1.87, resolve with
+`CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or set `resolver = "3"`, because the
+newest `sha2` needs 1.88. See the README's Build Requirements section.
+
+No version was yanked. 0.4.x gets security patches until 2027-05-31. See `CHANGELOG.md`.
+
 ## v0.4.1 (2026-09-23)
 
 Adds `BENCHMARKS.md`: measured cost of every operation the crate offers, on a

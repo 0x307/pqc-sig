@@ -54,6 +54,10 @@ without you changing anything.
 the conservative default this policy exists to give you — the cost of an unnecessary minor
 version bump is much lower than the cost of a silent break.
 
+**Security exception for the MSRV.** A security fix may raise the MSRV in a patch release,
+when the fixed dependency needs a newer Rust and no fixed version builds on the old one.
+The changelog entry names the advisory and says which Rust versions are dropped.
+
 ## 3. Deprecation before removal
 
 Nothing is deleted without a deprecation cycle first:
@@ -90,13 +94,15 @@ what makes a 0.x project look abandoned; a shipped no-op doesn't.
 This cadence is a floor, not a promise of frequency above it. Faster is normal, especially
 early. The floor is what's meant to hold indefinitely, including through a slow stretch.
 
-### Yanks
+### We never yank
 
-A version is yanked when it has a security defect, when it fails to build for a consumer,
-or when it produces data the rest of the family no longer accepts. It is never yanked to push
-people onto a newer feature set. A yanked version still resolves from an existing
-`Cargo.lock`, so nothing already built breaks; new resolutions skip it. The release that
-replaces it says why in `CHANGELOG.md`.
+No published version is ever yanked. That includes versions with a security bug. We fix
+forward: we ship a patched release and file a [RustSec](https://rustsec.org/) advisory that
+names the affected versions and the fixed one. `cargo audit` and `cargo deny` then flag the
+affected versions in your build, so you learn about the problem and the fix together.
+
+0.4.x is a legacy line. It gets security patches until 2027-05-31. The current line's
+`STABILITY.md` has the full support table.
 
 ## 6. Support posture
 
