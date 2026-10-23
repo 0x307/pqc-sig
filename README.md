@@ -224,15 +224,36 @@ let sig = signer.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
 
 ## Build Requirements
 
-- **Rust 1.85 or later** (edition 2021) — this is the crate's declared `rust-version`
-  (MSRV), enforced by the `msrv` job in [`ci.yml`](.github/workflows/ci.yml), which builds
-  the working tree with a pinned Rust 1.85.0 toolchain on every push/PR. The MSRV is driven
-  by a transitive dependency in the default build (a `block-buffer` version pulled in via
-  `slh-dsa`'s hashing chain requires the `edition2024` Cargo feature, stabilized in Rust
-  1.85.0) — not by this crate's own code. No nightly features are used. The MSRV promise
-  covers `cargo build`/`cargo check` only, not `cargo test`: a couple of this crate's
+- **Rust 1.85 or later** (edition 2021). This is the crate's declared `rust-version` (MSRV).
+  The `msrv` job in [`ci.yml`](.github/workflows/ci.yml) checks it on every push and PR. It
+  proves that a set of dependency versions compatible with Rust 1.85 exists and builds, with
+  a pinned Rust 1.85.0 toolchain. It resolves that set with Cargo's MSRV-aware fallback, so
+  it does not prove that a plain resolve on 1.85 works. See the note below. The MSRV is
+  driven by a transitive dependency in the default build, not by this crate's own code. A
+  `block-buffer` version pulled in via `slh-dsa`'s hashing chain requires the `edition2024`
+  Cargo feature, stabilized in Rust 1.85.0. No nightly features are used. The MSRV promise
+  covers `cargo build`/`cargo check` only, not `cargo test`. A couple of this crate's
   dev-only interop-test dependencies need a newer toolchain, but dev-dependencies are never
   pulled in by downstream consumers.
+
+> **On Rust 1.85 to 1.87?** No `Cargo.lock` ships with a library, so Cargo picks the newest
+> compatible versions. Today that includes `sha2` 0.11.1 (needs Rust 1.88) via `slh-dsa`,
+> and `ctutils` 0.4.x releases that need Rust 1.87, via both `ml-dsa` and `slh-dsa`. A plain
+> `cargo build` on 1.85 then fails with "rustc 1.85.0 is not supported by the following
+> packages". Turning features off does not avoid this, because `ml-dsa` alone still pulls
+> in `ctutils`. Either of these gives you a 1.85-compatible build:
+>
+> 1. Resolve with the MSRV-aware fallback, once, before you build:
+>
+>    ```bash
+>    CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback cargo generate-lockfile
+>    ```
+>
+> 2. Set `resolver = "3"` in your workspace or package `Cargo.toml`. Resolver 3 uses the
+>    fallback by default.
+>
+> Either way Cargo picks `sha2` 0.11.0 and `ctutils` 0.4.2, which build on 1.85. Both
+> options need Cargo 1.84 or later, which Rust 1.85 has.
 - No C compiler, credentials, network services, or local files outside the repo are needed
   to build or test this crate — every optional feature (`fndsa`, `hybrid`) is pure Rust.
 
@@ -266,8 +287,9 @@ Eight jobs:
 - **Packaged artifact (`--all-features`)** — same, with every optional feature enabled.
 - **MSRV (Rust 1.85.0, build)** — builds (not tests — see
   [Build Requirements](#build-requirements)) against the pinned MSRV toolchain, not `stable`.
-  Fails the moment any code or dependency bump relies on a newer language feature than the
-  declared `rust-version`.
+  It first resolves dependencies with `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`,
+  so it proves that a 1.85-compatible dependency set exists and builds. It fails if this
+  crate's code needs a newer Rust, or if no 1.85-compatible set can be found.
 - **`pqc-sig-wasm` (wasm32 cdylib artifact)** — builds the real standalone WASM artifact,
   `cargo build --target wasm32-unknown-unknown --no-default-features` in `pqc-sig-wasm/`.
   This is the job that would have caught the crate-split defect this repo used to have —

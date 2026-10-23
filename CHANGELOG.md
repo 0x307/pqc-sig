@@ -9,7 +9,7 @@ document for what counts as breaking inside `0.x`.
 
 ## [Unreleased]
 
-Documentation only. No change to the API, the wire formats or behaviour.
+Documentation and CI only. No change to the API, the wire formats or behaviour.
 
 - **Version policy.** [`STABILITY.md`](./STABILITY.md#6-versions-and-support-windows) now
   says that no version is ever yanked, including for security bugs. Fixes ship forward with
@@ -20,6 +20,12 @@ Documentation only. No change to the API, the wire formats or behaviour.
   2027-05-31. Versions yanked before 2026-10-22 are not covered.
 - **0.4 to 0.5 migration note** in `STABILITY.md`, taken from the 0.5.0 entry below.
 - `SECURITY.md` and the README point to the support table.
+- **Rust 1.85 note in the README.** A plain resolve on Rust 1.85 now picks `sha2` 0.11.1
+  (needs 1.88) and `ctutils` releases that need 1.87. The README's Build Requirements
+  section says how to get a 1.85-compatible build: resolve with
+  `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback`, or set `resolver = "3"`. It also now
+  says what the `msrv` CI job proves: that a 1.85-compatible dependency set exists and
+  builds. The job resolves that set with the same fallback. `rust-version` is still 1.85.
 
 ## [0.5.0] - 2026-09-24
 
