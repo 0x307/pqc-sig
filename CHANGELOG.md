@@ -29,7 +29,9 @@ formats or behaviour.
 
 - **MSRV is now Rust 1.87** (`rust-version = "1.87"`, also in `pqc-sig-wasm`). `ctutils`
   0.4.4 and 0.4.5, the fixed releases, need Rust 1.87. The newest `ctutils` that builds on
-  1.85 is 0.4.2, which is affected, so 1.85 and 1.86 are no longer supported.
+  1.85 is 0.4.2, which is affected, so 1.85 and 1.86 are no longer supported. An MSRV raise
+  is normally breaking. This one ships in a patch release under the new security exception
+  in [`STABILITY.md`](./STABILITY.md#2-what-counts-as-a-breaking-change).
   **Migration:** build with Rust 1.87 or later. On 1.87 with default features, a plain
   resolve picks `sha2` 0.11.1, which needs 1.88. Resolve with
   `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or set `resolver = "3"` and Cargo
