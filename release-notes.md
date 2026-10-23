@@ -1,5 +1,16 @@
 # pqc-sig Release Notes
 
+## v0.5.1 (2026-10-23)
+
+Documentation and CI only. No change to the API, the wire formats or behaviour, so there
+is nothing to migrate.
+
+`STABILITY.md` now has the version policy. No version is ever yanked, including for
+security bugs: fixes ship forward with a RustSec advisory. A legacy line gets security
+patches for 6 months after its successor ships. 0.5.x is current, and 0.4.x gets security
+patches until 2027-05-31. The README's Build Requirements section says how to get a build
+on Rust 1.85 to 1.87. See `CHANGELOG.md`.
+
 ## v0.5.0 (2026-09-24)
 
 ML-DSA and SLH-DSA are now features, `ml-dsa` and `slh-dsa`, both on by default. With

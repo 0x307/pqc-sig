@@ -115,7 +115,7 @@ Nothing that builds against it stops building.
 
 | Line | Latest | Status | Security patches until |
 |---|---|---|---|
-| 0.5.x | 0.5.0 | Current | Until it becomes legacy |
+| 0.5.x | 0.5.1 | Current | Until it becomes legacy |
 | 0.4.x | 0.4.2 | Legacy, supported | 2027-05-31 |
 
 0.4.x gets a longer window than 6 months from 0.5.0 (2026-09-24). The 0x307 crates that

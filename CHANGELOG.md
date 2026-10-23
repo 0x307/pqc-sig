@@ -7,7 +7,7 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
-## [Unreleased]
+## [0.5.1] - 2026-10-23
 
 Documentation and CI only. No change to the API, the wire formats or behaviour.
 
