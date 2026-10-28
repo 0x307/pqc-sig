@@ -7,6 +7,22 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## [Unreleased]
+
+Documentation only. No change to the API, the wire formats or behaviour.
+
+### Documentation
+
+- **Runnable examples for Multikey.** `SigPublicKey::to_multibase` now has a doctest that
+  encodes an ML-DSA-65 key, checks its code is a registered one and decodes it back, and
+  `SigAlgorithm::is_private_use_multicodec` has one showing FN-DSA's private-use codes against
+  ML-DSA's registered `0x1211`. Before this, the only example was in `docs/MULTICODEC.md`,
+  which docs.rs does not show.
+- **FIPS 206 link.** The README and `docs/MULTICODEC.md` linked FIPS 206 at
+  `csrc.nist.gov/pubs/fips/206/ipd`, which NIST now answers with "Page Not Found", and NIST's
+  publication search has no FIPS 206 record. The links now point at NIST's post-quantum
+  cryptography project page, and the text no longer calls FIPS 206 a published draft.
+
 ## [0.5.1] - 2026-10-23
 
 **Security, and an MSRV raise from Rust 1.85 to 1.87.** No change to the API, the wire

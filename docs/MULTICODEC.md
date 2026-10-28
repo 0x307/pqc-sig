@@ -75,7 +75,7 @@ waiting on an upstream registration with no committed timeline.
 
 **What this means in practice:**
 
-- **These codes will change.** Once [FIPS 206](https://csrc.nist.gov/pubs/fips/206/ipd)
+- **These codes will change.** Once [FIPS 206](https://csrc.nist.gov/projects/post-quantum-cryptography)
   is finalized and multiformats/multicodec registers an official FN-DSA/Falcon code,
   `SigAlgorithm::multicodec_code()` will migrate `FnDsa512`/`FnDsa1024` to that code in a
   follow-up **minor** release, per the "Revisit trigger" in
@@ -113,8 +113,9 @@ waiting on an upstream registration with no committed timeline.
 - [ ] **Upstream multicodec PR** — no PR or issue exists yet for FN-DSA/Falcon in
       [multiformats/multicodec](https://github.com/multiformats/multicodec). TODO: file
       one and link it here once opened (`TODO: <PR/issue URL>`).
-- [ ] **FIPS 206 final publication** — currently a NIST **draft** (ipd) standard; not
-      finalized. Track at <https://csrc.nist.gov/pubs/fips/206/ipd>. An upstream
+- [ ] **FIPS 206 final publication** — not yet published by NIST as a final standard, and
+      NIST has no publication page for it yet. Track at
+      <https://csrc.nist.gov/projects/post-quantum-cryptography>. An upstream
       multicodec registration is unlikely to land before FIPS 206 is final.
 - [ ] **Planned migration** (once an upstream code is registered), in order:
   1. Add the new registered code as the value `SigAlgorithm::multicodec_code()` returns
