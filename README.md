@@ -13,7 +13,7 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![FIPS 204](https://img.shields.io/badge/FIPS-204%20ML--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/204/final)
 [![FIPS 205](https://img.shields.io/badge/FIPS-205%20SLH--DSA-green.svg)](https://csrc.nist.gov/pubs/fips/205/final)
-[![FIPS 206](https://img.shields.io/badge/FIPS-206%20FN--DSA-orange.svg)](https://csrc.nist.gov/pubs/fips/206/ipd)
+[![FIPS 206](https://img.shields.io/badge/FIPS-206%20FN--DSA-orange.svg)](https://csrc.nist.gov/projects/post-quantum-cryptography)
 
 > **Reading the badges:** **CI** is the build-and-test signal — it should be green, and a red
 > one means something is actually broken. **wasm** builds the core crate for
@@ -70,8 +70,8 @@ per-vector provenance) and executed on every CI run via
 ### FN-DSA status
 
 FN-DSA (Falcon) support is **optional** — enable it with the `fndsa` feature flag; it is
-never compiled into the default build. [FIPS 206](https://csrc.nist.gov/pubs/fips/206/ipd)
-itself is a NIST **draft** standard, not yet finalized, and FN-DSA's Multikey/DID Document
+never compiled into the default build. [FIPS 206](https://csrc.nist.gov/projects/post-quantum-cryptography)
+itself is **not yet a final NIST standard**, and FN-DSA's Multikey/DID Document
 multicodec codes (`0x307000`/`0x307001`) are **provisional, private-use** codes this project
 self-assigned — see [`docs/MULTICODEC.md`](docs/MULTICODEC.md) for the full rationale and
 tracking status. **Never use FN-DSA as a default signature algorithm for interop purposes**

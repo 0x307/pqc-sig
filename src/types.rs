@@ -221,6 +221,17 @@ impl SigAlgorithm {
     /// Useful for callers who want to warn, log, or otherwise flag when a DID Document /
     /// Multikey they're producing embeds a non-standard code that other multicodec
     /// implementations will not recognize.
+    ///
+    /// ```
+    /// use pqc_sig::types::SigAlgorithm;
+    ///
+    /// // FN-DSA has no registered multicodec code yet, so its Multikey is pqc-sig-only.
+    /// assert!(SigAlgorithm::FnDsa512.is_private_use_multicodec());
+    /// assert!(SigAlgorithm::FnDsa1024.is_private_use_multicodec());
+    /// // ML-DSA uses the registered code, which other multicodec tools can read.
+    /// assert!(!SigAlgorithm::MlDsa65.is_private_use_multicodec());
+    /// assert_eq!(SigAlgorithm::MlDsa65.multicodec_code().unwrap(), 0x1211);
+    /// ```
     pub fn is_private_use_multicodec(&self) -> bool {
         matches!(self, SigAlgorithm::FnDsa512 | SigAlgorithm::FnDsa1024)
     }
@@ -372,6 +383,25 @@ impl SigPublicKey {
     /// upstream-registered one; see [`FN_DSA_PRIVATE_USE_BASE`] for the full rationale and
     /// interop scope. In practice this only returns `Err` for malformed/mismatched input, not
     /// for any currently-defined [`SigAlgorithm`] variant.
+    ///
+    /// Encode an ML-DSA-65 public key as a Multikey, check its code is a registered one, and
+    /// decode it back:
+    ///
+    /// ```
+    /// # #[cfg(feature = "ml-dsa")] {
+    /// use pqc_sig::fips204::MlDsa65Keypair;
+    /// use pqc_sig::types::SigPublicKey;
+    /// use rand::rngs::OsRng;
+    ///
+    /// let pk = MlDsa65Keypair::generate(&mut OsRng).unwrap().public_key();
+    /// let multikey = pk.to_multibase().unwrap();
+    /// assert!(multikey.starts_with('z'));
+    /// assert!(!pk.algorithm.is_private_use_multicodec());
+    ///
+    /// let back = SigPublicKey::from_multibase(pk.algorithm, &multikey).unwrap();
+    /// assert_eq!(back, pk);
+    /// # }
+    /// ```
     pub fn to_multibase(&self) -> SigResult<String> {
         let code = self.algorithm.multicodec_code()?;
         let mut prefixed = encode_varint(code);
