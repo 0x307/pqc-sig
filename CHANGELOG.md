@@ -82,6 +82,12 @@ unchanged.
   in through `ed25519-dalek`. The `ctutils >= 0.4.4` floor stays: it is unused in code but is
   the RUSTSEC-2026-0385 floor from 0.5.1.
 
+### CI
+
+- `ci.yml` runs on pull requests into `main` only, the filter `cargo-deny.yml` already had.
+  Stacked story PRs, based on feature branches, no longer run the matrix; the merge PR into
+  `main` does. `push` is unchanged.
+
 ### Documentation
 
 - **The yank text is now true** (FAM-01). `SECURITY.md` and `STABILITY.md` §6 said no
@@ -93,6 +99,10 @@ unchanged.
 - **[0.4.0 to 0.4.3: what changed](#040-to-043-what-changed)**, for a consumer on 0.4.0 or
   0.4.1 deciding whether to run `cargo update`. The support table now lists 0.4.3 as the
   latest 0.4.x, and 0.5.2 as the latest 0.5.x.
+- **A general security exception in `STABILITY.md` §2**, the same paragraph as pqc-kem's: a
+  security fix can ship in a patch even when it falls under "Breaking", if the alternative is
+  leaving the defect in the supported line, and the changelog names the rule it breaks. The
+  0.5.1 MSRV exception stays as it was. Nothing in 0.5.2 uses either.
 - **The hybrid is labelled as not interoperable with IETF LAMPS composite signatures**
   (`draft-ietf-lamps-pq-composite-sigs`). The README and the `hybrid` module and item docs
   say the construction and its context framing are crate-defined, and that signatures don't
