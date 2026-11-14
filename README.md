@@ -416,6 +416,14 @@ The opt-in `hybrid` feature adds an Ed25519 + ML-DSA-65 combiner for bridging cl
 deployments to PQC during migration: `HybridSigner` produces both signatures, and
 verification requires both to pass — an attacker must break both primitives to forge one.
 
+**Not interoperable with IETF LAMPS composite signatures.** The hybrid is a crate-defined
+construction, not the composite ML-DSA + Ed25519 signature of the IETF LAMPS draft
+(`draft-ietf-lamps-pq-composite-sigs`). Each half signs the message directly, the context
+framing of `sign_ctx` is crate-defined, and keys and signatures are two separate fields in
+JSON. A signature made here verifies only with this crate, and a composite signature made
+by an implementation of the draft doesn't verify here. Use it between systems that both run
+`pqc-sig`.
+
 ```toml
 pqc-sig = { version = "0.5", features = ["hybrid"] }
 ```
