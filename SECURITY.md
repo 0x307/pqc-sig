@@ -18,9 +18,10 @@ the one committed number in that posture; everything else is best-effort.
 ## Supported versions
 
 Security fixes land on the current line and on any legacy line still inside its 6-month
-window. No version is ever yanked, including for a security bug: we fix forward and file a
-RustSec advisory. The support table is in
-[`STABILITY.md`](./STABILITY.md#support-table-for-pqc-sig).
+window. We fix forward: a security fix ships as a new release with a RustSec advisory that
+names the affected and fixed versions. A version is yanked only when it can't be installed or
+would mislead, and the reason is recorded in [`CHANGELOG.md`](./CHANGELOG.md). The rule and
+the support table are in [`STABILITY.md`](./STABILITY.md#6-versions-and-support-windows).
 
 ## Dependency scanning
 

@@ -188,7 +188,8 @@ let sig = signer.sign_ctx(&mut OsRng, b"8gentz-agent-v1", msg)?;
 
 | Version | Date | Artifacts |
 |---------|------|-----------|
-| **v0.5.1** | 2026-10-23 | [crates.io](https://crates.io/crates/pqc-sig/0.5.1) |
+| **v0.5.2** | Unreleased | [crates.io](https://crates.io/crates/pqc-sig/0.5.2) |
+| v0.5.1 | 2026-10-23 | [crates.io](https://crates.io/crates/pqc-sig/0.5.1) |
 | v0.5.0 | 2026-09-24 | [crates.io](https://crates.io/crates/pqc-sig/0.5.0) |
 | v0.4.0 | 2026-09-09 | [crates.io](https://crates.io/crates/pqc-sig/0.4.0) |
 | v0.3.0 | 2026-09-02 | [crates.io](https://crates.io/crates/pqc-sig/0.3.0) |
@@ -416,6 +417,14 @@ The opt-in `hybrid` feature adds an Ed25519 + ML-DSA-65 combiner for bridging cl
 deployments to PQC during migration: `HybridSigner` produces both signatures, and
 verification requires both to pass — an attacker must break both primitives to forge one.
 
+**Not interoperable with IETF LAMPS composite signatures.** The hybrid is a crate-defined
+construction, not the composite ML-DSA + Ed25519 signature of the IETF LAMPS draft
+(`draft-ietf-lamps-pq-composite-sigs`). Each half signs the message directly, the context
+framing of `sign_ctx` is crate-defined, and keys and signatures are two separate fields in
+JSON. A signature made here verifies only with this crate, and a composite signature made
+by an implementation of the draft doesn't verify here. Use it between systems that both run
+`pqc-sig`.
+
 ```toml
 pqc-sig = { version = "0.5", features = ["hybrid"] }
 ```
@@ -571,7 +580,9 @@ for the authoritative Keep-a-Changelog-format record.
 This project ships `0.x`. See [`STABILITY.md`](./STABILITY.md) for what counts as a breaking
 change, deprecation notice, release cadence, and support posture. It also has the
 [support table](./STABILITY.md#support-table-for-pqc-sig): 0.5.x is current, and 0.4.x gets
-security patches until 2027-05-31. No version is ever yanked.
+security patches until 2027-05-31. Security fixes ship forward with a RustSec advisory. A
+version is yanked only when it can't be installed or would mislead, with the reason recorded
+in [`CHANGELOG.md`](./CHANGELOG.md#yanked-versions).
 
 ## Security
 
@@ -597,19 +608,22 @@ Ed Johnson
 
 ## The 0x307 crate family
 
-`pqc-sig` is one of six open-source crates from [0x307](https://0x307.com/crates), held to one
+`pqc-sig` is one of nine open-source crates from [0x307](https://0x307.com/crates), held to one
 audit and stability standard.
 
-| Crate | Tier | What it does |
-|---|---|---|
-| [pqc-sig](https://crates.io/crates/pqc-sig) (this crate) | Production | ML-DSA, SLH-DSA and FN-DSA signatures (FIPS 204/205/206) |
-| [pqc-kem](https://crates.io/crates/pqc-kem) | Production | ML-KEM (FIPS 203), the X25519 + ML-KEM-768 hybrid, X-Wing, and sealed boxes |
-| [aethel-core](https://crates.io/crates/aethel-core) | Production | Post-quantum anonymous identity: a separate identifier per context, context-bound ML-DSA signing |
-| [aethel-sdk](https://crates.io/crates/aethel-sdk) | Preview | The SDK over aethel-core, and the place to start |
-| [aethel-vault](https://crates.io/crates/aethel-vault) | Preview | Agent-held wallet: policy-gated x402 / EIP-3009 signing with ML-DSA-65 spend records |
-| [pqc-privacy](https://crates.io/crates/pqc-privacy) | Lab | Research bundle, kept off every identity and payment path |
+| Crate | Tier | What it does | Builds on |
+|---|---|---|---|
+| [pqc-kem](https://crates.io/crates/pqc-kem) | Production | ML-KEM (FIPS 203), the X25519 + ML-KEM-768 hybrid, X-Wing, and sealed boxes | none in the family |
+| [pqc-sig](https://crates.io/crates/pqc-sig) (this crate) | Production | ML-DSA, SLH-DSA and FN-DSA signatures (FIPS 204/205/206) | none in the family |
+| [aethel-core](https://crates.io/crates/aethel-core) | Production | Post-quantum anonymous identity: a separate identifier per context, context-bound ML-DSA signing | pqc-sig 0.5 |
+| [aethel-auth](https://crates.io/crates/aethel-auth) | Production | Delegated authority for agent identities: login proofs, bounded delegation, step-up approval, revocation | aethel-core 0.7 |
+| [aethel-sdk](https://crates.io/crates/aethel-sdk) | Preview | The SDK over aethel-core, and the place to start | pqc-sig 0.5 (aethel-core 0.7 vendored) |
+| [erand-nats](https://crates.io/crates/erand-nats) | Preview | A post-quantum NATS client inside a WASM component | pqc-kem 0.2, pqc-sig 0.4 |
+| [witan](https://crates.io/crates/witan) | Preview | Post-quantum gossip engine with message-level authentication, as a WASM component | pqc-kem 0.2, pqc-sig 0.4 |
+| [aethel-vault](https://crates.io/crates/aethel-vault) | Lab | Agent-held wallet: policy-gated x402 / EIP-3009 signing with ML-DSA-65 spend records | aethel-core 0.7 |
+| [pqc-privacy](https://crates.io/crates/pqc-privacy) | Lab | Research bundle, kept off every identity and payment path | pqc-kem 0.3, pqc-sig 0.5 |
 
-**Production** crates are thin, standards-bound libraries meant to be depended on today. **Preview** crates work and are published, with APIs still settling. **Lab** crates are research, never on an identity or payment path.
+**Production** crates are thin, standards-bound libraries meant to be depended on today. **Preview** crates work and are published, with APIs still settling. **Lab** crates are research and experiments: try them, but keep them off a production identity or payment path.
 
 **Runnable examples:** [0x307/examples](https://github.com/0x307/examples), one program per
 crate, pinned to the published versions.

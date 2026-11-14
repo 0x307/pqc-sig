@@ -7,12 +7,109 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
-## [Unreleased]
+## Yanked versions
 
-Documentation only. No change to the API, the wire formats or behaviour.
+Seven versions are yanked. Each line gives the date it was yanked, from the crates.io audit
+log, and the reason. No reason was written down when these yanks were made, so each says
+"reason not recorded". Where this changelog documents a defect in that version, the line
+names it, without claiming it was the reason. Each was yanked after its successor was
+published.
+
+- **0.1.0**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded. Its `fndsa`
+  feature linked `pqcrypto-falcon`, which carried three unmaintained-upstream advisories
+  (RUSTSEC-2026-0162/0163/0165), fixed in 0.2.0.
+- **0.2.0**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded. Its README and
+  doc examples pinned `pqc-sig = "0.1"`, so following the Quick Start installed 0.1.x
+  (fixed in 0.2.1).
+- **0.2.1**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded.
+- **0.3.0**: yanked 2026-09-04, four minutes after 0.3.1 was published. Reason not recorded.
+  0.3.1 changed only crates.io metadata (the `wasm` keyword and the `wasm` and `no-std`
+  categories).
+- **0.3.1**: yanked 2026-09-10, after 0.4.0 was published. Reason not recorded.
+- **0.4.0**: yanked 2026-09-23, after 0.4.1 was published. Reason not recorded.
+- **0.4.1**: yanked 2026-09-24, after 0.4.2 was published. Reason not recorded. Its `src/`
+  is identical to 0.4.0's.
+
+## 0.4.0 to 0.4.3: what changed
+
+For a consumer on 0.4.0 or 0.4.1 (both yanked), `cargo update -p pqc-sig` inside `0.4`
+brings in 0.4.3. Taken from `git diff v0.4.0 v0.4.3`:
+
+- **No library code changed.** `src/` is identical in 0.4.0, 0.4.1, 0.4.2 and 0.4.3. The API,
+  the wire formats and behaviour are the same, and keys and signatures move between them
+  unchanged.
+- **A `ctutils >= 0.4.4` floor** (0.4.3) for
+  [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html). `ml-dsa` and
+  `slh-dsa` already pulled `ctutils` in, so no crate is added to the graph. The floor stops a
+  resolver choosing an affected version.
+- **MSRV 1.85 to 1.87** (0.4.3), because the fixed `ctutils` needs Rust 1.87. On 1.87,
+  resolve with `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or `resolver = "3"` so
+  Cargo picks `sha2` 0.11.0 rather than 0.11.1, which needs 1.88.
+- **Metadata** (0.4.2): `homepage` and `documentation` are set, and the README gains the crate
+  family header and footer.
+- **Development only** (0.4.1): benchmarks (`benches/signatures.rs`, `BENCHMARKS.md`,
+  `scripts/bench-report.mjs`) and a `criterion` dev-dependency. Consumers don't build them.
+- **Policy text** (0.4.2, 0.4.3): `STABILITY.md` gained a yank rule in 0.4.2 and the MSRV
+  security exception in 0.4.3.
+
+0.4.3 was released from the `release/0.4` branch, so its full entry is in that branch's
+`CHANGELOG.md`, not below.
+
+## [0.5.2] - Unreleased
+
+A patch release. No API break, no change to behaviour, and no change to any wire encoding:
+the golden encoding vectors (`tests/encoding_vectors.rs`) and every published KAT pass
+unchanged.
+
+### Added
+
+- **NIST ACVP vectors for ML-DSA-65** (SIG-01): keyGen, sigGen and sigVer, from
+  usnistgov/ACVP-Server at commit `975de31e`, in `tests/vectors/acvp/` and run by
+  `tests/acvp_ml_dsa_65.rs`. Trimmed to ML-DSA-65 and to what the public API can run:
+  keyGen 25 of 25 cases, sigGen 43 of 120, sigVer 21 of 60. Left out: internal-interface
+  and external-mu groups, and pre-hash cases with hashes pqc-sig doesn't accept for
+  ML-DSA-65. sigGen is checked by verifying NIST's signatures: reproducing them needs the
+  expanded signing key or `rnd`, which the public API doesn't take. Source, revision and
+  trimming are in `tests/vectors/README.md`; `scripts/trim-acvp-ml-dsa-65.py` regenerates
+  the files.
+- **`supply-chain/audits.toml`**: cargo-vet audits of this crate's own live versions (0.4.2,
+  0.4.3, 0.5.0, 0.5.1), importable by consumers (see the file's header).
+
+### Removed
+
+- **The unused `subtle` dependency** (SIG-02). Nothing in the crate used it. Default and
+  encoding-only builds no longer have `subtle` in their graph; with `hybrid` it still comes
+  in through `ed25519-dalek`. The `ctutils >= 0.4.4` floor stays: it is unused in code but is
+  the RUSTSEC-2026-0385 floor from 0.5.1.
+
+### CI
+
+- `ci.yml` runs on pull requests into `main` only, the filter `cargo-deny.yml` already had.
+  Stacked story PRs, based on feature branches, no longer run the matrix; the merge PR into
+  `main` does. `push` is unchanged.
 
 ### Documentation
 
+- **The yank text is now true** (FAM-01). `SECURITY.md` and `STABILITY.md` §6 said no
+  version is ever yanked, while 7 of the 11 published versions are. They now describe what is
+  done: fix forward, add a RustSec advisory for a security fix, and yank only when a version
+  can't be installed or would mislead, with the reason recorded here. The README says the
+  same. [Yanked versions](#yanked-versions), at the top of this file, gives one line per
+  yanked version.
+- **[0.4.0 to 0.4.3: what changed](#040-to-043-what-changed)**, for a consumer on 0.4.0 or
+  0.4.1 deciding whether to run `cargo update`. The support table now lists 0.4.3 as the
+  latest 0.4.x, and 0.5.2 as the latest 0.5.x.
+- **A general security exception in `STABILITY.md` §2**, the same paragraph as pqc-kem's: a
+  security fix can ship in a patch even when it falls under "Breaking", if the alternative is
+  leaving the defect in the supported line, and the changelog names the rule it breaks. The
+  0.5.1 MSRV exception stays as it was. Nothing in 0.5.2 uses either.
+- **The hybrid is labelled as not interoperable with IETF LAMPS composite signatures**
+  (`draft-ietf-lamps-pq-composite-sigs`). The README and the `hybrid` module and item docs
+  say the construction and its context framing are crate-defined, and that signatures don't
+  verify across the two in either direction.
+- **The crate family section** lists all nine crates with a tier and the family line each one
+  builds on, the same table as the other family READMEs. aethel-vault is now Lab, and the
+  Lab definition reads "keep them off a production identity or payment path".
 - **Runnable examples for Multikey.** `SigPublicKey::to_multibase` now has a doctest that
   encodes an ML-DSA-65 key, checks its code is a registered one and decodes it back, and
   `SigAlgorithm::is_private_use_multicodec` has one showing FN-DSA's private-use codes against

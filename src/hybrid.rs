@@ -6,6 +6,25 @@
 //! classical and the post-quantum primitive to forge a signature — the standard
 //! posture for bridging classical deployments to PQC during migration.
 //!
+//! # Not interoperable with IETF LAMPS composite signatures
+//!
+//! This hybrid is a crate-defined construction. It is **not** the composite ML-DSA +
+//! Ed25519 signature of the IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`), and it does not interoperate with
+//! implementations of that draft in either direction:
+//!
+//! - Each half signs the caller's message directly. The draft instead signs a
+//!   prefixed, domain-separated representation of the message, which this crate does
+//!   not build.
+//! - The context framing of [`HybridSigner::sign_ctx`] is crate-defined (see
+//!   [`HYBRID_CTX_FRAME_DOMAIN`](crate::hybrid::HYBRID_CTX_FRAME_DOMAIN)), not the
+//!   draft's.
+//! - Keys and signatures are encoded as two separate fields ([`HybridPublicKey`],
+//!   [`HybridSignature`], JSON with base64url), not the draft's concatenated encoding
+//!   or its algorithm identifiers.
+//!
+//! A signature made here verifies only with this crate (or a reimplementation of this
+//! exact construction). Use it between systems that both run `pqc-sig`.
+//!
 //! # Example
 //! ```rust,no_run
 //! use rand::rngs::OsRng;
@@ -48,6 +67,10 @@ use crate::types::{
 };
 
 /// Algorithm identifier for this hybrid combination.
+///
+/// A crate-defined label, not an IETF or IANA algorithm identifier. This hybrid is not
+/// the composite signature of the IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`); see the
+/// [module docs](self#not-interoperable-with-ietf-lamps-composite-signatures).
 pub const HYBRID_ALGORITHM: &str = "ed25519+ml_dsa_65";
 
 /// Domain byte for the crate-defined Ed25519 context framing used by
@@ -59,6 +82,10 @@ pub const HYBRID_ALGORITHM: &str = "ed25519+ml_dsa_65";
 /// half's input as `HYBRID_CTX_FRAME_DOMAIN ‖ u8(ctx.len()) ‖ ctx ‖ message` before
 /// handing it to plain Ed25519 signing/verification. See [`HybridSigner::sign_ctx`] for
 /// the full rationale.
+///
+/// The framing is not interoperable with the IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`), which defines its own
+/// message representation; see the
+/// [module docs](self#not-interoperable-with-ietf-lamps-composite-signatures).
 pub const HYBRID_CTX_FRAME_DOMAIN: u8 = 0x00;
 
 /// Build the crate-defined Ed25519 ctx-framing used by [`HybridSigner::sign_ctx`]/
@@ -74,6 +101,9 @@ fn frame_classical_ctx(ctx: &[u8], message: &[u8]) -> Vec<u8> {
 }
 
 /// Combined Ed25519 + ML-DSA-65 public key.
+///
+/// Crate-defined encoding (two fields), not the composite public key of the
+/// IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HybridPublicKey {
     /// Ed25519 verifying key (32 bytes).
@@ -103,6 +133,10 @@ impl HybridPublicKey {
 }
 
 /// Combined Ed25519 + ML-DSA-65 signature.
+///
+/// Crate-defined encoding (two fields), not the composite signature of the
+/// IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`). It verifies only with [`HybridSigner::verify`] or
+/// [`HybridSigner::verify_ctx`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HybridSignature {
     /// Ed25519 signature (64 bytes).
@@ -160,6 +194,9 @@ impl core::fmt::Debug for HybridSecretKey {
 ///
 /// Both signatures are produced on [`sign`](Self::sign); [`verify`](Self::verify)
 /// requires both to pass.
+///
+/// Crate-defined, and not interoperable with the IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`); see the
+/// [module docs](self#not-interoperable-with-ietf-lamps-composite-signatures).
 pub struct HybridSigner {
     ed25519_key: Ed25519SigningKey,
     ml_dsa_key: MlDsa65Keypair,
@@ -225,6 +262,9 @@ impl HybridSigner {
     }
 
     /// Sign a message, producing both an Ed25519 and an ML-DSA-65 signature.
+    ///
+    /// Each half signs `message` directly. The result is not an IETF LAMPS composite
+    /// signature and won't verify under an implementation of that draft.
     pub fn sign(&self, message: &[u8]) -> SigResult<HybridSignature> {
         let classical = self.ed25519_key.sign(message).to_bytes().to_vec();
         let pqc = self.ml_dsa_key.sign_deterministic(message)?.bytes;
@@ -277,6 +317,10 @@ impl HybridSigner {
     /// half cannot be replayed as a plain Ed25519 signature over `message` under a
     /// different (or absent) context.
     ///
+    /// This framing is crate-defined and is not interoperable with the
+    /// IETF LAMPS composite-signature draft (`draft-ietf-lamps-pq-composite-sigs`): a signature made here does not verify under that
+    /// draft's composite verification, and the reverse.
+    ///
     /// Because of this framing, **`sign_ctx(rng, &[], m)` is NOT byte-identical to
     /// [`Self::sign`]`(m)`** on the classical half — unlike the pure-FIPS `sign_ctx`
     /// methods elsewhere in this crate, where an empty `ctx` is byte-identical to the
@@ -307,7 +351,8 @@ impl HybridSigner {
     /// Verify a signature made with [`Self::sign_ctx`] — both the Ed25519 (over the
     /// `ctx`-framed message, see [`Self::sign_ctx`]) and the ML-DSA-65 (native FIPS
     /// `ctx`) checks must pass. `ctx` must match exactly what was used to sign; fails
-    /// closed like [`Self::verify`].
+    /// closed like [`Self::verify`]. Accepts only this crate's framing, not IETF LAMPS
+    /// composite signatures.
     pub fn verify_ctx(
         public_key: &HybridPublicKey,
         ctx: &[u8],

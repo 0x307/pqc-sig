@@ -1,5 +1,14 @@
 # pqc-sig Release Notes
 
+## v0.5.2 (Unreleased)
+
+**A patch release with no API, behaviour or wire change.** NIST ACVP vectors for ML-DSA-65
+(keyGen, sigGen, sigVer) now run in CI. The unused `subtle` dependency is gone. The docs no
+longer promise never to yank: they describe the practice, and `CHANGELOG.md` records each
+past yank. The hybrid is labelled as not interoperable with IETF LAMPS composite
+signatures. A `supply-chain/audits.toml` publishes cargo-vet audits of the live versions.
+See `CHANGELOG.md`.
+
 ## v0.5.1 (2026-10-23)
 
 **Security fix and MSRV raise.** pqc-sig now requires `ctutils` 0.4.4 or later, which
