@@ -69,9 +69,6 @@ bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
 # Zeroize secret key material on drop
 zeroize = { version = "1", default-features = false, features = ["derive", "alloc"] }
 
-# Constant-time comparison
-subtle = { version = "2", default-features = false }
-
 # Error handling — no_std compatible
 thiserror = { version = "2", default-features = false }
 
