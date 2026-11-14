@@ -7,12 +7,68 @@ adheres to the breaking-change and deprecation rules in
 [`STABILITY.md`](./STABILITY.md) rather than strict SemVer prior to `1.0.0` — see that
 document for what counts as breaking inside `0.x`.
 
+## Yanked versions
+
+Seven versions are yanked. Each line gives the date it was yanked, from the crates.io audit
+log, and the reason. No reason was written down when these yanks were made, so each says
+"reason not recorded". Where this changelog documents a defect in that version, the line
+names it, without claiming it was the reason. Each was yanked after its successor was
+published.
+
+- **0.1.0**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded. Its `fndsa`
+  feature linked `pqcrypto-falcon`, which carried three unmaintained-upstream advisories
+  (RUSTSEC-2026-0162/0163/0165), fixed in 0.2.0.
+- **0.2.0**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded. Its README and
+  doc examples pinned `pqc-sig = "0.1"`, so following the Quick Start installed 0.1.x
+  (fixed in 0.2.1).
+- **0.2.1**: yanked 2026-09-03, when 0.3.0 was published. Reason not recorded.
+- **0.3.0**: yanked 2026-09-04, four minutes after 0.3.1 was published. Reason not recorded.
+  0.3.1 changed only crates.io metadata (the `wasm` keyword and the `wasm` and `no-std`
+  categories).
+- **0.3.1**: yanked 2026-09-10, after 0.4.0 was published. Reason not recorded.
+- **0.4.0**: yanked 2026-09-23, after 0.4.1 was published. Reason not recorded.
+- **0.4.1**: yanked 2026-09-24, after 0.4.2 was published. Reason not recorded. Its `src/`
+  is identical to 0.4.0's.
+
+## 0.4.0 to 0.4.3: what changed
+
+For a consumer on 0.4.0 or 0.4.1 (both yanked), `cargo update -p pqc-sig` inside `0.4`
+brings in 0.4.3. Taken from `git diff v0.4.0 v0.4.3`:
+
+- **No library code changed.** `src/` is identical in 0.4.0, 0.4.1, 0.4.2 and 0.4.3. The API,
+  the wire formats and behaviour are the same, and keys and signatures move between them
+  unchanged.
+- **A `ctutils >= 0.4.4` floor** (0.4.3) for
+  [RUSTSEC-2026-0385](https://rustsec.org/advisories/RUSTSEC-2026-0385.html). `ml-dsa` and
+  `slh-dsa` already pulled `ctutils` in, so no crate is added to the graph. The floor stops a
+  resolver choosing an affected version.
+- **MSRV 1.85 to 1.87** (0.4.3), because the fixed `ctutils` needs Rust 1.87. On 1.87,
+  resolve with `CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` or `resolver = "3"` so
+  Cargo picks `sha2` 0.11.0 rather than 0.11.1, which needs 1.88.
+- **Metadata** (0.4.2): `homepage` and `documentation` are set, and the README gains the crate
+  family header and footer.
+- **Development only** (0.4.1): benchmarks (`benches/signatures.rs`, `BENCHMARKS.md`,
+  `scripts/bench-report.mjs`) and a `criterion` dev-dependency. Consumers don't build them.
+- **Policy text** (0.4.2, 0.4.3): `STABILITY.md` gained a yank rule in 0.4.2 and the MSRV
+  security exception in 0.4.3.
+
+0.4.3 was released from the `release/0.4` branch, so its full entry is in that branch's
+`CHANGELOG.md`, not below.
+
 ## [Unreleased]
 
 Documentation only. No change to the API, the wire formats or behaviour.
 
 ### Documentation
 
+- **The yank text is now true.** `SECURITY.md` and `STABILITY.md` §6 said no version is
+  ever yanked, while 7 of the 11 published versions are. They now describe what is done: fix
+  forward, add a RustSec advisory for a security fix, and yank only when a version can't be
+  installed or would mislead, with the reason recorded here. The README says the same.
+  [Yanked versions](#yanked-versions) below gives one line per yanked version.
+- **[0.4.0 to 0.4.3: what changed](#040-to-043-what-changed)**, for a consumer on 0.4.0 or
+  0.4.1 deciding whether to run `cargo update`. The support table now lists 0.4.3 as the
+  latest 0.4.x.
 - **Runnable examples for Multikey.** `SigPublicKey::to_multibase` now has a doctest that
   encodes an ML-DSA-65 key, checks its code is a registered one and decodes it back, and
   `SigAlgorithm::is_private_use_multicodec` has one showing FN-DSA's private-use codes against

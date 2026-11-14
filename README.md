@@ -571,7 +571,9 @@ for the authoritative Keep-a-Changelog-format record.
 This project ships `0.x`. See [`STABILITY.md`](./STABILITY.md) for what counts as a breaking
 change, deprecation notice, release cadence, and support posture. It also has the
 [support table](./STABILITY.md#support-table-for-pqc-sig): 0.5.x is current, and 0.4.x gets
-security patches until 2027-05-31. No version is ever yanked.
+security patches until 2027-05-31. Security fixes ship forward with a RustSec advisory. A
+version is yanked only when it can't be installed or would mislead, with the reason recorded
+in [`CHANGELOG.md`](./CHANGELOG.md#yanked-versions).
 
 ## Security
 

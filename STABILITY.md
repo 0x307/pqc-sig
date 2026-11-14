@@ -96,12 +96,23 @@ early. The floor is what's meant to hold indefinitely, including through a slow 
 
 ## 6. Versions and support windows
 
-### We never yank
+### Fix forward, and yank only with a recorded reason
 
-No published version is ever yanked. That includes versions with a security bug. We fix
-forward: we ship a patched release and file a [RustSec](https://rustsec.org/) advisory that
-names the affected versions and the fixed one. `cargo audit` and `cargo deny` then flag the
-affected versions in your build, so you learn about the problem and the fix together.
+We fix forward. A fix ships as a new release. A security fix also gets a
+[RustSec](https://rustsec.org/) advisory that names the affected versions and the fixed one, so
+`cargo audit` and `cargo deny` flag the affected versions in your build and you learn about the
+problem and the fix together. A security bug alone is not a reason to yank.
+
+A version is yanked only when it can't be installed (it fails to build or resolve for a
+consumer) or when it would mislead (its published code or README describes behaviour it
+doesn't have, in a way a consumer would act on). Each yank gets one line in
+[`CHANGELOG.md`](./CHANGELOG.md#yanked-versions) giving the reason. A yanked version still
+resolves from an existing `Cargo.lock`, so nothing already built breaks; new resolutions skip
+it.
+
+The gates that keep a release from needing a yank are in CI: golden encoding vectors
+(`tests/encoding_vectors.rs`), NIST ACVP and known-answer vectors (`tests/kat_tests.rs`), and a
+build of the packaged `.crate` itself.
 
 ### More than one line can be live
 
@@ -120,15 +131,18 @@ Nothing that builds against it stops building.
 | Line | Latest | Status | Security patches until |
 |---|---|---|---|
 | 0.5.x | 0.5.1 | Current | Until it becomes legacy |
-| 0.4.x | 0.4.2 | Legacy, supported | 2027-05-31 |
+| 0.4.x | 0.4.3 | Legacy, supported | 2027-05-31 |
 
 0.4.x gets a longer window than 6 months from 0.5.0 (2026-09-24). The 0x307 crates that
 depend on `pqc-sig` move to 0.5 by about 2026-11-16. The 0.4.x window runs 6 months from
 then, rounded up to the end of the month.
 
-Versions yanked before 2026-10-22 are not covered by this policy. Those are 0.1.0, 0.2.0,
-0.2.1, 0.3.0, 0.3.1, 0.4.0 and 0.4.1. They stay yanked and get no patches. If you are on one
-of them, move to 0.4.2 or 0.5.x.
+Seven versions are yanked: 0.1.0, 0.2.0, 0.2.1, 0.3.0, 0.3.1, 0.4.0 and 0.4.1. They were
+yanked before this rule was written, and for most of them no reason was recorded at the time.
+[`CHANGELOG.md`](./CHANGELOG.md#yanked-versions) has one line for each with what is known.
+They stay yanked and get no patches. If you are on one of them, move to 0.4.3 or 0.5.x. For
+0.4.0 and 0.4.1, the [0.4.0 to 0.4.3 note](./CHANGELOG.md#040-to-043-what-changed) says what
+`cargo update` brings in.
 
 ### Moving from 0.4 to 0.5
 
