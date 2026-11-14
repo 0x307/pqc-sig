@@ -7,6 +7,69 @@ version-controlled JSON files, executed on every `cargo test` via
 `.crate` (see "Packaging" below) so they work fully offline for downstream
 consumers too.
 
+## Full ACVP ML-DSA-65: keyGen, sigGen, sigVer
+
+`acvp/` holds NIST's ACVP vectors for ML-DSA-65, unmodified, trimmed only to what
+pqc-sig's public API can run. They are run by
+[`tests/acvp_ml_dsa_65.rs`](../acvp_ml_dsa_65.rs) on every `cargo test` with the
+`ml-dsa` feature (on by default), and ship in the packaged crate.
+
+**Source.** [usnistgov/ACVP-Server](https://github.com/usnistgov/ACVP-Server), commit
+`975de31eb83d87039ec88934fdc47d8c312b892d` (master on 2026-11-14), files
+`gen-val/json-files/ML-DSA-{keyGen,sigGen,sigVer}-FIPS204/internalProjection.json`,
+`revision` `FIPS204`, `vsId` 42. The last upstream changes to these files were
+`2972def` (keyGen, sigGen; RELEASE/v1.1.0.43, 2026-07-20) and `a7f283c` (sigVer,
+2026-07-31). Each trimmed file records its upstream URL, commit and the SHA-256 of
+the upstream file it was cut from.
+
+| File | Upstream ML-DSA-65 cases | Kept | Size |
+|---|---|---|---|
+| `acvp/ml_dsa_65_keygen.json` | 25 (1 group) | 25 | 100 KB |
+| `acvp/ml_dsa_65_siggen.json` | 120 (8 groups) | 43 | 790 KB |
+| `acvp/ml_dsa_65_sigver.json` | 60 (4 groups) | 21 (4 valid, 17 invalid) | 385 KB |
+
+**How they were trimmed** (`scripts/trim-acvp-ml-dsa-65.py`, re-runnable):
+
+- Only `parameterSet` `ML-DSA-65`. The upstream files also hold ML-DSA-44 and -87.
+- Fields dropped: `sk` (the expanded FIPS 204 signing key, 4032 bytes, which
+  pqc-sig can't load), `rnd` (signing randomness, which pqc-sig's public signing
+  doesn't take) and `deferred`. Every kept value is copied byte for byte, upper-case
+  hex as NIST ships it.
+- Cases pqc-sig's public API can't run are left out and counted per group in each
+  file's `omitted` list:
+  - **Internal interface** (`signatureInterface: internal`), with or without external
+    mu: sigGen groups 9, 10, 21, 22 (60 cases), sigVer groups 9, 10 (30 cases).
+    pqc-sig exposes only the external interface (FIPS 204 Algorithms 2/3 and 4/5).
+  - **Pre-hash with a hash pqc-sig doesn't accept for ML-DSA-65:** SHA2-224, SHA2-256,
+    SHA2-512/224, SHA2-512/256, SHA3-224, SHA3-256 and SHAKE-128 (17 sigGen and 9
+    sigVer cases). They are either missing from `PreHash` or below ML-DSA-65's 192-bit
+    collision-strength floor, which pqc-sig enforces. SHA2-384, SHA2-512, SHA3-384,
+    SHA3-512 and SHAKE-256 cases are kept.
+
+**What each test checks:**
+
+- **keyGen** (25): `from_secret_key_bytes(seed)` gives NIST's public key, byte for
+  byte. NIST's expanded `sk` is not compared, because pqc-sig doesn't export the
+  expanded key.
+- **sigGen** (43): NIST's signature verifies under NIST's public key
+  (`verify_ctx` for pure, `verify_prehash` for pre-hash, with the caller computing
+  the digest). This is the reachable half of sigGen. Reproducing NIST's signature
+  bytes needs the expanded `sk` (deterministic groups) or `rnd` (hedged groups) as
+  input, and pqc-sig's public API takes neither: it loads only the 32-byte seed and
+  its signing ignores the RNG. No API was added for it.
+- **sigVer** (21): pqc-sig's accept/reject matches NIST's `testPassed` for each case,
+  including NIST's modified message, commitment, `z` and hint cases.
+
+Each test asserts its exact case count, so an emptied or truncated file fails, and
+runs a control inside the test: one hex digit flipped in a case that should pass
+must fail. Flipping one hex digit in any of the three files by hand makes its test
+fail (checked when the files were added).
+
+To re-derive: download the three upstream files at the commit above into
+`<dir>/ML-DSA-{keyGen,sigGen,sigVer}-FIPS204/internalProjection.json`, then run
+`python -I scripts/trim-acvp-ml-dsa-65.py <dir> tests/vectors/acvp`. The output must
+match the committed files.
+
 ## Provenance — what's real ACVP data, and what's self-generated
 
 Both `pqc-sig 0.4.0`'s public API constraints and honesty about provenance
@@ -33,6 +96,10 @@ extraction script used is documented below so the subset can be re-derived
 or expanded.
 
 ### Why not ACVP `sigGen` directly
+
+(This explains the generated `ml_dsa_*.json` files. NIST's own sigGen signatures for
+ML-DSA-65 are now checked by verification in `acvp/`, above.)
+
 
 ACVP's `ML-DSA-sigGen-FIPS204` vectors ship the signing key as the **expanded**
 secret key (2560/4032/4896 bytes for ML-DSA-44/65/87) — the full FIPS 204
@@ -96,6 +163,10 @@ sourced *keys*, not externally sourced *signatures*).
 ```
 tests/vectors/
 ├── README.md              — this file
+├── acvp/                  — full NIST ACVP ML-DSA-65 keyGen/sigGen/sigVer, trimmed
+│   ├── ml_dsa_65_keygen.json     (run by tests/acvp_ml_dsa_65.rs)
+│   ├── ml_dsa_65_siggen.json
+│   └── ml_dsa_65_sigver.json
 ├── acvp_source/           — curated raw NIST ACVP JSON subset (provenance evidence)
 │   ├── ml_dsa_keygen.json
 │   ├── ml_dsa_sigver.json

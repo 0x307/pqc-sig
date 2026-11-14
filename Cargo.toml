@@ -140,6 +140,10 @@ name = "kat_tests"
 required-features = ["ml-dsa", "slh-dsa"]
 
 [[test]]
+name = "acvp_ml_dsa_65"
+required-features = ["ml-dsa"]
+
+[[test]]
 name = "fn_dsa_tests"
 required-features = ["fndsa"]
 
