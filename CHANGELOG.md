@@ -55,20 +55,51 @@ brings in 0.4.3. Taken from `git diff v0.4.0 v0.4.3`:
 0.4.3 was released from the `release/0.4` branch, so its full entry is in that branch's
 `CHANGELOG.md`, not below.
 
-## [Unreleased]
+## [0.5.2] - Unreleased
 
-Documentation only. No change to the API, the wire formats or behaviour.
+A patch release. No API break, no change to behaviour, and no change to any wire encoding:
+the golden encoding vectors (`tests/encoding_vectors.rs`) and every published KAT pass
+unchanged.
+
+### Added
+
+- **NIST ACVP vectors for ML-DSA-65** (SIG-01): keyGen, sigGen and sigVer, from
+  usnistgov/ACVP-Server at commit `975de31e`, in `tests/vectors/acvp/` and run by
+  `tests/acvp_ml_dsa_65.rs`. Trimmed to ML-DSA-65 and to what the public API can run:
+  keyGen 25 of 25 cases, sigGen 43 of 120, sigVer 21 of 60. Left out: internal-interface
+  and external-mu groups, and pre-hash cases with hashes pqc-sig doesn't accept for
+  ML-DSA-65. sigGen is checked by verifying NIST's signatures: reproducing them needs the
+  expanded signing key or `rnd`, which the public API doesn't take. Source, revision and
+  trimming are in `tests/vectors/README.md`; `scripts/trim-acvp-ml-dsa-65.py` regenerates
+  the files.
+- **`supply-chain/audits.toml`**: cargo-vet audits of this crate's own live versions (0.4.2,
+  0.4.3, 0.5.0, 0.5.1), importable by consumers (see the file's header).
+
+### Removed
+
+- **The unused `subtle` dependency** (SIG-02). Nothing in the crate used it. Default and
+  encoding-only builds no longer have `subtle` in their graph; with `hybrid` it still comes
+  in through `ed25519-dalek`. The `ctutils >= 0.4.4` floor stays: it is unused in code but is
+  the RUSTSEC-2026-0385 floor from 0.5.1.
 
 ### Documentation
 
-- **The yank text is now true.** `SECURITY.md` and `STABILITY.md` §6 said no version is
-  ever yanked, while 7 of the 11 published versions are. They now describe what is done: fix
-  forward, add a RustSec advisory for a security fix, and yank only when a version can't be
-  installed or would mislead, with the reason recorded here. The README says the same.
-  [Yanked versions](#yanked-versions) below gives one line per yanked version.
+- **The yank text is now true** (FAM-01). `SECURITY.md` and `STABILITY.md` §6 said no
+  version is ever yanked, while 7 of the 11 published versions are. They now describe what is
+  done: fix forward, add a RustSec advisory for a security fix, and yank only when a version
+  can't be installed or would mislead, with the reason recorded here. The README says the
+  same. [Yanked versions](#yanked-versions), at the top of this file, gives one line per
+  yanked version.
 - **[0.4.0 to 0.4.3: what changed](#040-to-043-what-changed)**, for a consumer on 0.4.0 or
   0.4.1 deciding whether to run `cargo update`. The support table now lists 0.4.3 as the
-  latest 0.4.x.
+  latest 0.4.x, and 0.5.2 as the latest 0.5.x.
+- **The hybrid is labelled as not interoperable with IETF LAMPS composite signatures**
+  (`draft-ietf-lamps-pq-composite-sigs`). The README and the `hybrid` module and item docs
+  say the construction and its context framing are crate-defined, and that signatures don't
+  verify across the two in either direction.
+- **The crate family section** lists all nine crates with a tier and the family line each one
+  builds on, the same table as the other family READMEs. aethel-vault is now Lab, and the
+  Lab definition reads "keep them off a production identity or payment path".
 - **Runnable examples for Multikey.** `SigPublicKey::to_multibase` now has a doctest that
   encodes an ML-DSA-65 key, checks its code is a registered one and decodes it back, and
   `SigAlgorithm::is_private_use_multicodec` has one showing FN-DSA's private-use codes against
