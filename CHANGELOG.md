@@ -55,7 +55,7 @@ brings in 0.4.3. Taken from `git diff v0.4.0 v0.4.3`:
 0.4.3 was released from the `release/0.4` branch, so its full entry is in that branch's
 `CHANGELOG.md`, not below.
 
-## [0.5.2] - Unreleased
+## [0.5.2] - 2026-11-16
 
 A patch release. No API break, no change to behaviour, and no change to any wire encoding:
 the golden encoding vectors (`tests/encoding_vectors.rs`) and every published KAT pass
